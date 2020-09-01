@@ -1,6 +1,7 @@
 #include <vector>
 #include <algorithm>
 #include <limits>
+#include <iostream>
 
 #include "hungarian.h"
 
@@ -9,7 +10,6 @@ using std::min;
 using std::vector;
 
 Hungarian::Hungarian(int node_count, int max_weight, vector<vector<int>> cost_graph) {
-
 	n = node_count;
 	N = node_count;
 	max_edge_weight = max_weight*2;
