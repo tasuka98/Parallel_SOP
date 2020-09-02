@@ -12,20 +12,144 @@
 #include <vector>
 #include <bits/stdc++.h>
 
+bool optimal_found = false;
 int graph_index = 0;
+
+vector<int> raedy_list;
+int* depCnt;
+int* taken_arr;
 
 using namespace std;
 
+void solver::process_solution() {
+    if (cur_cost < best_cost) {
+        best_solution = cur_solution;
+        best_cost = cur_cost;
+    }
+    return;
+}
+
+int solver::dynamic_hungarian(int src, int dest) {
+    hungarian_solver.fix_row(src, dest);
+	hungarian_solver.fix_column(dest, src);
+	hungarian_solver.solve_dynamic();
+    return hungarian_solver.get_matching_cost()/2;
+}
+
+bool solver::LB_Check(int src, int dest) {
+    if (cur_cost > best_cost) return false;
+
+    //Dyanmic hungarian lower bound
+    int lower_bound = dynamic_hungarian(src,dest);
+
+    if (lower_bound >= best_cost) {
+        return false;
+    }
+
+    return true;
+}
+
+
+void solver::enumerate(int i) {
+    if (optimal_found) return;
+    if (i == node_count) {
+        process_solution();
+        return;
+    }
+
+    bool keep_explore = true;
+    
+    if (cur_solution.size() >= 2) {
+        int u = cur_solution.end()[-2];
+        int v = cur_solution.back();
+        keep_explore = LB_Check(u,v);
+    }
+    
+
+    if (!keep_explore) return;
+
+    vector<int> ready_list;
+
+    for (int i = 0; i < node_count; i++) {
+        if (!depCnt[i] && !taken_arr[i]) {
+            //Push vertices with 0 depCnt into the ready list
+            ready_list.push_back(i);
+        }
+    }
+
+    //update vertex dependent count for current node neighbors
+
+    int taken_node = 0;
+    int u = 0;
+    int v = 0;
+
+    while(!ready_list.empty()) {
+        //Take the choosen node;
+        taken_node = ready_list.back();
+        ready_list.pop_back();
+        if (cur_solution.empty()) u = -1;
+        else {
+            u = cur_solution.back();
+            v = taken_node;
+            cur_cost += cost_graph[u][v].retrieve_weight();
+        }
+
+        for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
+        cur_solution.push_back(taken_node);
+        taken_arr[taken_node] = 1;
+
+        enumerate(i+1);
+
+        //Untake the choosen node;
+        for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
+        taken_arr[taken_node] = 0;
+        cur_solution.pop_back();
+        if (u != -1) {
+            cur_cost -= cost_graph[u][v].retrieve_weight();
+            //Revert previous hungarian operations
+            hungarian_solver.undue_row(u,v);
+		    hungarian_solver.undue_column(v,u);
+        }
+    }
+    
+    return;
+}
+
+
 void solver::solve(string filename) {
     retrieve_input(filename);
-    nearest_neightbor();
+    best_solution = nearest_neightbor();
     int max_edge_weight = get_maxedgeweight();
-    hungarian_solver = Hungarian((int)cost_graph.size(), max_edge_weight, get_cost_matrix(max_edge_weight));
+    hungarian_solver = Hungarian(node_count, max_edge_weight, get_cost_matrix(max_edge_weight));
     MMCP_static_lowerbound = hungarian_solver.start()/2;
     EGB_static_lowerbound = mmcp_lb();
-    cout << "best solution found using NN is " << best_solution << endl;
+
+    depCnt = new int[node_count];
+    taken_arr = new int[node_count];
+    memset(depCnt,0,node_count * sizeof(int));
+    memset(taken_arr,0,node_count * sizeof(int));
+
+    for (int i = 0; i < node_count; i++) {
+        for (unsigned k = 0; k < dependent_graph[i].size(); k++) {
+            depCnt[dependent_graph[i][k]]++;
+        }
+    }
+
+    cout << "best solution found using NN is " << best_cost << endl;
     cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
     cout << "MMCP-based LB is " << MMCP_static_lowerbound << endl;
+
+    cur_cost = 0;
+    enumerate(0);
+
+    cout << "optimal solution using B&B is " << best_cost << endl;
+
+    cout << "the optimal solution contains ";
+    for (int i = 0; i < node_count; i++) {
+        if (i != node_count - 1) cout << best_solution[i] << "-->";
+        else cout << best_solution[i];
+    }
+    cout << endl;
 }
 
 void solver::retrieve_input(string filename) {
@@ -68,6 +192,8 @@ void solver::retrieve_input(string filename) {
             j++;
         }
     }
+    node_count = cost_graph.size();
+
     //Trim redundant edges
     transitive_redundantcy();
     return;
@@ -75,13 +201,13 @@ void solver::retrieve_input(string filename) {
 
 void solver::transitive_redundantcy() {
     stack<int> dfs_stack;
-    stat visit_arr[dependent_graph.size()];
+    stat visit_arr[node_count];
 
-    for (long unsigned int i = 0; i < dependent_graph.size(); i++) {
+    for (int i = 0; i < node_count; i++) {
         visit_arr[i] = stat::access;
     }
 
-    for (long unsigned int i = 0; i < dependent_graph.size(); i++) {
+    for (int i = 0; i < node_count; i++) {
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             dfs_stack.push(dependent_graph[i][k]);
             visit_arr[dependent_graph[i][k]] = stat::no_access;
@@ -108,14 +234,14 @@ void solver::transitive_redundantcy() {
             }
         }
         //Clear visit_array for the iteration of the dfs.
-        for (long unsigned int i = 0; i < dependent_graph.size(); i++) {
+        for (int i = 0; i < node_count; i++) {
             visit_arr[i] = stat::access;
         }
     }
 
-    in_degree = std::vector<vector<int>>(dependent_graph.size());
+    in_degree = std::vector<vector<int>>(node_count);
 
-    for (unsigned i = 0; i < dependent_graph.size(); i++) {
+    for (int i = 0; i < node_count; i++) {
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             int c = dependent_graph[i][k];
             in_degree[c].push_back(i);
@@ -142,27 +268,26 @@ void solver::sort_weight(vector<vector<edge>>& graph) {
     return;
 }
 
-void solver::nearest_neightbor() {
+vector<int> solver::nearest_neightbor() {
     
     vector<int> solution;
     int current_node;
-    int dep_size = dependent_graph.size();
-    bool visit_arr[dep_size];
+    bool visit_arr[node_count];
     bool selected = false;
-    int depCnt_arr[dep_size];
+    int depCnt_arr[node_count];
     vector<vector<edge>> sorted_costgraph = cost_graph; 
     sort_weight(sorted_costgraph);
     //sort input based on weight for NN heurestic
-    memset(depCnt_arr,0,dep_size*sizeof(int));
+    memset(depCnt_arr,0,node_count*sizeof(int));
 
-    for (int i = 0; i < dep_size; i++) {
+    for (int i = 0; i < node_count; i++) {
         visit_arr[i] = false;
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             depCnt_arr[dependent_graph[i][k]]++;
         }
     }
 
-    for (int i = 0; i < dep_size; i++) {
+    for (int i = 0; i < node_count; i++) {
         if (depCnt_arr[i] == 0 && !selected) {
             current_node = i;
             visit_arr[current_node] = true;
@@ -175,7 +300,7 @@ void solver::nearest_neightbor() {
     int num = 1;
     int solution_cost = 0;
 
-    while (num < dep_size) {
+    while (num < node_count) {
         for (long unsigned int i = 0; i < dependent_graph[current_node].size(); i++) {
             depCnt_arr[dependent_graph[current_node][i]]--;
         }
@@ -192,20 +317,14 @@ void solver::nearest_neightbor() {
         }
     }
 
-    
-
-    for (long unsigned int i = 0; i < solution.size(); i++) {
-        cout << solution[i] << ",";
-    }
-    cout << endl;
-
-    best_solution = solution_cost;
+    best_cost = solution_cost;
+    return solution;
 }
 
 
 int solver::get_maxedgeweight() {
     int max = 0;
-    for (long unsigned int i = 0; i < cost_graph.size(); i++) {
+    for (int i = 0; i < node_count; i++) {
         for (auto edge_weight : cost_graph[i]) {
             int weight = edge_weight.retrieve_weight();
             if (weight > max) max = weight;
@@ -215,11 +334,11 @@ int solver::get_maxedgeweight() {
 }
 
 int solver::get_nodecount() {
-    return (int)cost_graph.size();
+    return node_count;
 }
 
 void solver::print_dep() {
-    for (long unsigned int i = 0; i < dependent_graph.size(); i++) {
+    for (int i = 0; i < node_count; i++) {
         cout << "node " << i << "has children: ";
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             if (k != dependent_graph[i].size() - 1) cout << dependent_graph[i][k] << ",";
@@ -230,15 +349,14 @@ void solver::print_dep() {
 }
 
 int solver::mmcp_lb() {
-    int size = dependent_graph.size();
     int outsum = 0;
     int insum = 0;
-    int out_array[size];
-    int in_array[size];
-    int depCnt_arr[size];
+    int out_array[node_count];
+    int in_array[node_count];
+    int depCnt_arr[node_count];
     
-    memset(depCnt_arr,0,size*sizeof(int));
-    for (int i = 0; i < size; i++) {
+    memset(depCnt_arr,0,node_count*sizeof(int));
+    for (int i = 0; i < node_count; i++) {
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             depCnt_arr[dependent_graph[i][k]]++;
         }
@@ -247,7 +365,7 @@ int solver::mmcp_lb() {
     int out_max = 0;
     int in_max = 0;
 
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < node_count; i++) {
         int min = INT_MAX;
 
 
@@ -256,7 +374,7 @@ int solver::mmcp_lb() {
             if (weight < min) min = weight;
         }
 
-        for (int k = 0; k < size; k++) {
+        for (int k = 0; k < node_count; k++) {
             int weight = cost_graph[i][k].retrieve_weight();
             if (find(dependent_graph[k].begin(),dependent_graph[k].end(),i) == dependent_graph[k].end()) {
                 if (k != i && depCnt_arr[k] == 0 && weight < min) min = weight;
@@ -271,7 +389,7 @@ int solver::mmcp_lb() {
             if (weight < min) min = weight;
         }
 
-        for (int k = 0; k < size; k++) {
+        for (int k = 0; k < node_count; k++) {
             int weight = cost_graph[k][i].retrieve_weight();
             if (find(in_degree[k].begin(),in_degree[k].end(),i) == dependent_graph[k].end()) {
                 if (k != i && depCnt_arr[k] == 0 && weight < min) min = weight;
@@ -281,23 +399,20 @@ int solver::mmcp_lb() {
         in_array[i] = min;
     }
 
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < node_count; i++) {
         if (!dependent_graph[i].size() && out_array[i] > out_max) out_max = out_array[i];
         if (!depCnt_arr[i] && in_array[i] > in_max) in_max = in_array[i];
         outsum += out_array[i];
         insum += in_array[i];
     }
 
-    cout << "out max is " << out_max << endl;
-
     return max(outsum-out_max,insum-in_max);
 }
 
 vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
-    int size = cost_graph.size();
     vector<vector<int>> matrix(cost_graph.size());
-    for(int i = 0; i < size; ++i){
-		matrix[i] = vector<int>(size, max_edge_weight*2);
+    for(int i = 0; i < node_count; ++i){
+		matrix[i] = vector<int>(node_count, max_edge_weight*2);
 	}
 
     int i = 0;
