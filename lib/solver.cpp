@@ -1,6 +1,6 @@
 #include "solver.hpp"
+#include "history.hpp"
 #include <iostream>
-#include <map>
 #include <fstream>
 #include <stack>
 #include <sstream>
@@ -11,7 +11,9 @@
 #include <functional>
 #include <vector>
 #include <bits/stdc++.h>
+#include <map>
 
+map<pair<int,int>,HistoryNode> history_table;
 bool optimal_found = false;
 int graph_index = 0;
 
@@ -36,21 +38,106 @@ int solver::dynamic_hungarian(int src, int dest) {
     return hungarian_solver.get_matching_cost()/2;
 }
 
+bool solver::HistoryUtilization() {
+    int bit_vector[node_count];
+    vector<int> remain;
+    memset(bit_vector,0,node_count*sizeof(int));
+    for (auto node : cur_solution) {
+        bit_vector[node] = 1;
+    }
+
+    int conversion = 0;
+    for (int i = 0; i < node_count; i++) {
+        if (bit_vector[i]) conversion += 1 << i;
+        else remain.push_back(i);
+    }
+    int last_element = cur_solution.back();
+    if (history_table.find(make_pair(conversion,last_element)) == history_table.end()) return true;
+    HistoryNode history_node = history_table[make_pair(conversion,last_element)];
+
+    int history_prefix = history_node.prefix_cost;
+    int history_lb = history_node.lower_bound;
+
+    
+    if (cur_cost >= history_prefix) return false;
+
+    int imp = history_prefix - cur_cost;
+    
+    if (imp <= history_lb - best_cost) return false;
+    history_table[make_pair(conversion,last_element)].prefix_sched = cur_solution;
+    history_table[make_pair(conversion,last_element)].prefix_cost = cur_cost;
+    history_table[make_pair(conversion,last_element)].lower_bound = history_lb - imp;
+    
+    if (!history_node.suffix_sched.empty()) {
+        vector<int> temp = cur_solution;
+        vector<int> suffix_sched = history_node.suffix_sched;
+        temp.insert(temp.end(),suffix_sched.begin(),suffix_sched.end());
+        int p_node = temp[0];
+        int total_cost = 0;
+        for (unsigned k = 1; k < temp.size(); k++) {
+            total_cost += cost_graph[p_node][temp[k]].retrieve_weight();
+            p_node = temp[k];
+        }
+        best_solution = temp;
+        best_cost = total_cost;
+        history_table[make_pair(conversion,last_element)].lower_bound = best_cost;
+        return false;
+    }
+    
+    
+
+    return true;
+}
+
 bool solver::LB_Check(int src, int dest) {
     if (cur_cost > best_cost) return false;
-
     //Dyanmic hungarian lower bound
+
+    bool decision = HistoryUtilization();
+    if (!decision) return false;
+    
+    
+    /*
     int lower_bound = dynamic_hungarian(src,dest);
 
     if (lower_bound >= best_cost) {
         return false;
     }
+    */
+    
 
     return true;
 }
 
+void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
+
+    int bit_vector[node_count];
+    memset(bit_vector,0,node_count*sizeof(int));
+    for (auto node : cur_solution) {
+        bit_vector[node] = 1;
+    }
+
+    int conversion = 0;
+    for (int i = 0; i < node_count; i++) {
+        if (bit_vector[i]) conversion += 1 << i;
+    }
+    int last_element = cur_solution.back();
+    if ((int)cur_solution.size() != node_count) {
+        history_table.insert({make_pair(conversion,last_element),HistoryNode(prefix_cost,lower_bound,cur_solution)});
+    }
+
+    else {
+        std::vector<int> suffix_sched;
+        for (int k = i; k < node_count; k++) {
+            suffix_sched.push_back(cur_solution[k]);
+        }
+        history_table.insert({make_pair(conversion,last_element),HistoryNode(prefix_cost,lower_bound,cur_solution,suffix_sched)});
+    }
+}   
+
 
 void solver::enumerate(int i) {
+
     if (optimal_found) return;
     if (i == node_count) {
         process_solution();
@@ -58,7 +145,7 @@ void solver::enumerate(int i) {
     }
 
     bool keep_explore = true;
-    
+
     if (cur_solution.size() >= 2) {
         int u = cur_solution.end()[-2];
         int v = cur_solution.back();
@@ -96,14 +183,32 @@ void solver::enumerate(int i) {
 
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
         cur_solution.push_back(taken_node);
+
+        /*
+        cout << "partial is ";
+        for (int k = 0; k < Partial_solution.size(); k++) { 
+            cout << Partial_solution[k] << ",";
+        }
+
+        cout << "cur is ";
+        for (int k = 0; k < cur_solution.size(); k++) { 
+            cout << cur_solution[k] << ",";
+        }
+        cout << endl;
+        */
         taken_arr[taken_node] = 1;
+        
 
         enumerate(i+1);
-
+        
         //Untake the choosen node;
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
         taken_arr[taken_node] = 0;
         cur_solution.pop_back();
+        hungarian_solver.solve_dynamic();
+        int cur_lb = hungarian_solver.get_matching_cost()/2;
+        assign_historytable(cur_cost,cur_lb,i);
+
         if (u != -1) {
             cur_cost -= cost_graph[u][v].retrieve_weight();
             //Revert previous hungarian operations
@@ -120,7 +225,7 @@ void solver::solve(string filename) {
     retrieve_input(filename);
     best_solution = nearest_neightbor();
     int max_edge_weight = get_maxedgeweight();
-    hungarian_solver = Hungarian(node_count, max_edge_weight, get_cost_matrix(max_edge_weight));
+    hungarian_solver = Hungarian(node_count, max_edge_weight+1, get_cost_matrix(max_edge_weight+1));
     MMCP_static_lowerbound = hungarian_solver.start()/2;
     EGB_static_lowerbound = mmcp_lb();
 
@@ -134,13 +239,20 @@ void solver::solve(string filename) {
             depCnt[dependent_graph[i][k]]++;
         }
     }
-
     cout << "best solution found using NN is " << best_cost << endl;
+    cout << "the NN solution contains ";
+    for (int i = 0; i < node_count; i++) {
+        if (i != node_count - 1) cout << best_solution[i] << "-->";
+        else cout << best_solution[i];
+    }
     cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
     cout << "MMCP-based LB is " << MMCP_static_lowerbound << endl;
 
     cur_cost = 0;
+    auto start_time = chrono::high_resolution_clock::now();
     enumerate(0);
+    auto end_time = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count();
 
     cout << "optimal solution using B&B is " << best_cost << endl;
 
@@ -149,6 +261,8 @@ void solver::solve(string filename) {
         if (i != node_count - 1) cout << best_solution[i] << "-->";
         else cout << best_solution[i];
     }
+    cout << endl;
+    cout << "B&B solver run time is " << duration << " microseconds" << endl;
     cout << endl;
 }
 
@@ -181,17 +295,24 @@ void solver::retrieve_input(string filename) {
     for (int i = 0; i < (int)file_matrix.size(); i++) {
         int j = 0;
         for (auto edge_weight: file_matrix[i]) {
+            hung_graph[i].push_back(edge(i,j,edge_weight));
             if (edge_weight < 0) {
                 cost_graph[i].push_back(edge(i,j,file_matrix[j][i]));
                 dependent_graph[j].push_back(i);
             }
             else { 
                 cost_graph[i].push_back(edge(i,j,edge_weight));
-                if (i != j) hung_graph[i].push_back(edge(i,j,edge_weight));
             }
             j++;
         }
-    }
+    }/*
+    for (int i = 0; i < cost_graph.size(); i++) {
+        cout << "node " << i << "has: ";
+        for (edge node : cost_graph[i]) {
+            cout << node.retrieve_weight() << "->";
+        }
+        cout << endl;
+    }*/
     node_count = cost_graph.size();
 
     //Trim redundant edges
@@ -208,6 +329,7 @@ void solver::transitive_redundantcy() {
     }
 
     for (int i = 0; i < node_count; i++) {
+
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             dfs_stack.push(dependent_graph[i][k]);
             visit_arr[dependent_graph[i][k]] = stat::no_access;
@@ -250,9 +372,10 @@ void solver::transitive_redundantcy() {
 }
 
 
-bool compare (edge& src, edge& target) {
+bool compare (edge src, edge target) {
     int src_weight = src.retrieve_weight();
     int dest_weight = target.retrieve_weight();
+
     return (src_weight < dest_weight);
 }
 
@@ -262,14 +385,13 @@ void solver::sort_weight(vector<vector<edge>>& graph) {
 
     for (int i = 0; i < size; i++) {
         graph_index = i;
-        sort(graph[i].begin(),graph[i].end(),compare);
+        stable_sort(graph[i].begin(),graph[i].end(),compare);
     }
 
     return;
 }
 
 vector<int> solver::nearest_neightbor() {
-    
     vector<int> solution;
     int current_node;
     bool visit_arr[node_count];
@@ -299,13 +421,12 @@ vector<int> solver::nearest_neightbor() {
     
     int num = 1;
     int solution_cost = 0;
-
+    
     while (num < node_count) {
         for (long unsigned int i = 0; i < dependent_graph[current_node].size(); i++) {
             depCnt_arr[dependent_graph[current_node][i]]--;
         }
         for (auto node: sorted_costgraph[current_node]) {
-             
             if (!visit_arr[node.retrieve_dest()] && !depCnt_arr[node.retrieve_dest()]) {
                 current_node = node.retrieve_dest();
                 solution_cost += node.retrieve_weight();
@@ -410,24 +531,28 @@ int solver::mmcp_lb() {
 }
 
 vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
-    vector<vector<int>> matrix(cost_graph.size());
+    vector<vector<int>> matrix(node_count);
     for(int i = 0; i < node_count; ++i){
 		matrix[i] = vector<int>(node_count, max_edge_weight*2);
 	}
 
-    int i = 0;
-    int k = 0;
-    for (vector<edge> edge_list : hung_graph) {
-        k = 0;
+    for (vector<edge> edge_list : cost_graph) {
         for (auto edge : edge_list) {
-            matrix[edge.retrieve_src()][edge.retrieve_dest()] = edge.retrieve_weight()*2;
-            k++;
+            int i = edge.retrieve_src();
+            int k = edge.retrieve_dest();
+            int x = hung_graph[i][k].retrieve_weight();
+            int y = hung_graph[k][i].retrieve_weight();
+            if (x != -1 && y != -1 && i != k) {
+                matrix[i][k] = x * 2;
+            }
+            else if (find(dependent_graph[i].begin(), dependent_graph[i].end(), k) != dependent_graph[i].end()) {
+                matrix[i][k] = x * 2;
+            }
         }
-        i++;
     }
 
     /*
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < node_count; i++) {
 		std::cout << "matrix at row" << i << "is ";
 		for (auto weight : matrix[i]) {
 			std::cout << weight << ",";
@@ -435,6 +560,7 @@ vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
 		std::cout << std::endl;
 	}
     */
+    
     return matrix;
 }
 

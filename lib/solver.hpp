@@ -1,6 +1,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <chrono>
 #include "../lib/hungarian.h"
 
 using namespace std;
@@ -37,11 +38,13 @@ class solver {
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
         vector<int> nearest_neightbor();
         bool LB_Check(int src, int dest);
+        bool HistoryUtilization();
         int get_maxedgeweight();
         int mmcp_lb();
         int get_nodecount();
         int dynamic_hungarian(int src, int dest);
         void process_solution();
+        void assign_historytable(int prefix_cost,int lower_bound,int i);
         void enumerate(int i);
         void solve(string filename);
         void retrieve_input(string filename);
