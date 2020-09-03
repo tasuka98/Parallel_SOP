@@ -1,7 +1,7 @@
 CC = g++
 LINK = $(CC) -o
 CXX_VERSION = -std=c++11
-OPTIMIZATION = -O3
+OPTIMIZATION = -O3 -Og -pg
 CXXFLAG = -c -g $(CXX_VERSION) -Wall
 SRC = ./src
 LIB = ./lib

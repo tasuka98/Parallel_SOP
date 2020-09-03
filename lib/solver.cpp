@@ -11,17 +11,28 @@
 #include <functional>
 #include <vector>
 #include <bits/stdc++.h>
-#include <map>
+#include <unordered_map>
 
-map<pair<int,int>,HistoryNode> history_table;
+using namespace std;
+
+struct Hash { 
+    template <class T1, class T2> 
+    size_t operator()(const pair<T1, T2>& p) const
+    { 
+        auto hash1 = hash<T1>{}(p.first); 
+        auto hash2 = hash<T2>{}(p.second); 
+        return hash1 ^ hash2; 
+    } 
+}; 
+
+unordered_map<pair<int,int>,HistoryNode,Hash> history_table;
 bool optimal_found = false;
 int graph_index = 0;
 
 vector<int> raedy_list;
 int* depCnt;
 int* taken_arr;
-
-using namespace std;
+int current_lb = 0;
 
 void solver::process_solution() {
     if (cur_cost < best_cost) {
@@ -58,7 +69,6 @@ bool solver::HistoryUtilization() {
     int history_prefix = history_node.prefix_cost;
     int history_lb = history_node.lower_bound;
 
-    
     if (cur_cost >= history_prefix) return false;
 
     int imp = history_prefix - cur_cost;
@@ -66,26 +76,19 @@ bool solver::HistoryUtilization() {
     if (imp <= history_lb - best_cost) return false;
     history_table[make_pair(conversion,last_element)].prefix_sched = cur_solution;
     history_table[make_pair(conversion,last_element)].prefix_cost = cur_cost;
-    history_table[make_pair(conversion,last_element)].lower_bound = history_lb - imp;
+    history_table[make_pair(conversion,last_element)].lower_bound = current_lb;
     
     if (!history_node.suffix_sched.empty()) {
         vector<int> temp = cur_solution;
         vector<int> suffix_sched = history_node.suffix_sched;
+        int suffix_cost = history_table[make_pair(conversion,last_element)].suffix_cost;
         temp.insert(temp.end(),suffix_sched.begin(),suffix_sched.end());
-        int p_node = temp[0];
-        int total_cost = 0;
-        for (unsigned k = 1; k < temp.size(); k++) {
-            total_cost += cost_graph[p_node][temp[k]].retrieve_weight();
-            p_node = temp[k];
-        }
         best_solution = temp;
-        best_cost = total_cost;
+        best_cost = cur_cost + suffix_cost;
         history_table[make_pair(conversion,last_element)].lower_bound = best_cost;
         return false;
     }
     
-    
-
     return true;
 }
 
@@ -93,18 +96,27 @@ bool solver::LB_Check(int src, int dest) {
     if (cur_cost > best_cost) return false;
     //Dyanmic hungarian lower bound
 
-    bool decision = HistoryUtilization();
-    if (!decision) return false;
+   
     
-    
-    /*
     int lower_bound = dynamic_hungarian(src,dest);
+    current_lb = lower_bound;
 
     if (lower_bound >= best_cost) {
         return false;
     }
-    */
+
+    bool decision = HistoryUtilization();
+    if (!decision) return false;
+
     
+    /*
+        std::cout << "the current solution is";
+		for (int i : cur_solution) {
+			std::cout << i << ",";
+		}
+		std::cout << std::endl;
+		std::cout << "the lower bound is " << lower_bound << std::endl;
+    */
 
     return true;
 }
@@ -118,6 +130,7 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
     }
 
     int conversion = 0;
+
     for (int i = 0; i < node_count; i++) {
         if (bit_vector[i]) conversion += 1 << i;
     }
@@ -128,10 +141,15 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
 
     else {
         std::vector<int> suffix_sched;
-        for (int k = i; k < node_count; k++) {
+        int root_node = cur_solution[i];
+        int suffix_cost = 0;
+        suffix_sched.push_back(root_node);
+        for (int k = i+1; k < node_count; k++) {
             suffix_sched.push_back(cur_solution[k]);
+            suffix_cost += cost_graph[root_node][k].retrieve_weight();
+            root_node = k;
         }
-        history_table.insert({make_pair(conversion,last_element),HistoryNode(prefix_cost,lower_bound,cur_solution,suffix_sched)});
+        history_table.insert({make_pair(conversion,last_element),HistoryNode(prefix_cost,suffix_cost,lower_bound,cur_solution,suffix_sched)});
     }
 }   
 
@@ -157,7 +175,7 @@ void solver::enumerate(int i) {
 
     vector<int> ready_list;
 
-    for (int i = 0; i < node_count; i++) {
+    for (int i = node_count-1; i >= 0; i--) {
         if (!depCnt[i] && !taken_arr[i]) {
             //Push vertices with 0 depCnt into the ready list
             ready_list.push_back(i);
@@ -183,30 +201,21 @@ void solver::enumerate(int i) {
 
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
         cur_solution.push_back(taken_node);
-
-        /*
-        cout << "partial is ";
-        for (int k = 0; k < Partial_solution.size(); k++) { 
-            cout << Partial_solution[k] << ",";
-        }
-
-        cout << "cur is ";
-        for (int k = 0; k < cur_solution.size(); k++) { 
-            cout << cur_solution[k] << ",";
-        }
-        cout << endl;
-        */
+        
         taken_arr[taken_node] = 1;
         
 
         enumerate(i+1);
         
         //Untake the choosen node;
+        v = taken_node = cur_solution.back();
+        u = cur_solution.end()[-2];
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
         taken_arr[taken_node] = 0;
-        cur_solution.pop_back();
         hungarian_solver.solve_dynamic();
         int cur_lb = hungarian_solver.get_matching_cost()/2;
+        hungarian_solver.undue_row(u,v);
+		hungarian_solver.undue_column(v,u);
         assign_historytable(cur_cost,cur_lb,i);
 
         if (u != -1) {
@@ -215,6 +224,7 @@ void solver::enumerate(int i) {
             hungarian_solver.undue_row(u,v);
 		    hungarian_solver.undue_column(v,u);
         }
+        cur_solution.pop_back();
     }
     
     return;
@@ -228,6 +238,7 @@ void solver::solve(string filename) {
     hungarian_solver = Hungarian(node_count, max_edge_weight+1, get_cost_matrix(max_edge_weight+1));
     MMCP_static_lowerbound = hungarian_solver.start()/2;
     EGB_static_lowerbound = mmcp_lb();
+    current_lb = MMCP_static_lowerbound;
 
     depCnt = new int[node_count];
     taken_arr = new int[node_count];
@@ -245,6 +256,7 @@ void solver::solve(string filename) {
         if (i != node_count - 1) cout << best_solution[i] << "-->";
         else cout << best_solution[i];
     }
+    cout << endl;
     cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
     cout << "MMCP-based LB is " << MMCP_static_lowerbound << endl;
 
@@ -262,7 +274,7 @@ void solver::solve(string filename) {
         else cout << best_solution[i];
     }
     cout << endl;
-    cout << "B&B solver run time is " << duration << " microseconds" << endl;
+    cout << "B&B solver run time is " << setprecision(4) << duration / (float)(1000000) << " seconds" << endl;
     cout << endl;
 }
 
