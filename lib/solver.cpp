@@ -28,6 +28,7 @@ struct Hash {
 unordered_map<pair<int,int>,HistoryNode,Hash> history_table;
 bool optimal_found = false;
 int graph_index = 0;
+int enumerated_nodes = 0;
 
 vector<int> raedy_list;
 int* depCnt;
@@ -76,7 +77,7 @@ bool solver::HistoryUtilization() {
     if (imp <= history_lb - best_cost) return false;
     history_table[make_pair(conversion,last_element)].prefix_sched = cur_solution;
     history_table[make_pair(conversion,last_element)].prefix_cost = cur_cost;
-    history_table[make_pair(conversion,last_element)].lower_bound = current_lb;
+    history_table[make_pair(conversion,last_element)].lower_bound = history_lb - imp;
     
     if (!history_node.suffix_sched.empty()) {
         vector<int> temp = cur_solution;
@@ -96,7 +97,8 @@ bool solver::LB_Check(int src, int dest) {
     if (cur_cost > best_cost) return false;
     //Dyanmic hungarian lower bound
 
-   
+    bool decision = HistoryUtilization();
+    if (!decision) return false;
     
     int lower_bound = dynamic_hungarian(src,dest);
     current_lb = lower_bound;
@@ -105,10 +107,6 @@ bool solver::LB_Check(int src, int dest) {
         return false;
     }
 
-    bool decision = HistoryUtilization();
-    if (!decision) return false;
-
-    
     /*
         std::cout << "the current solution is";
 		for (int i : cur_solution) {
@@ -203,7 +201,6 @@ void solver::enumerate(int i) {
         cur_solution.push_back(taken_node);
         
         taken_arr[taken_node] = 1;
-        
 
         enumerate(i+1);
         
@@ -223,6 +220,7 @@ void solver::enumerate(int i) {
             //Revert previous hungarian operations
             hungarian_solver.undue_row(u,v);
 		    hungarian_solver.undue_column(v,u);
+            enumerated_nodes++;
         }
         cur_solution.pop_back();
     }
@@ -237,7 +235,7 @@ void solver::solve(string filename) {
     int max_edge_weight = get_maxedgeweight();
     hungarian_solver = Hungarian(node_count, max_edge_weight+1, get_cost_matrix(max_edge_weight+1));
     MMCP_static_lowerbound = hungarian_solver.start()/2;
-    EGB_static_lowerbound = mmcp_lb();
+    //EGB_static_lowerbound = mmcp_lb();
     current_lb = MMCP_static_lowerbound;
 
     depCnt = new int[node_count];
@@ -257,7 +255,7 @@ void solver::solve(string filename) {
         else cout << best_solution[i];
     }
     cout << endl;
-    cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
+    //cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
     cout << "MMCP-based LB is " << MMCP_static_lowerbound << endl;
 
     cur_cost = 0;
@@ -275,6 +273,7 @@ void solver::solve(string filename) {
     }
     cout << endl;
     cout << "B&B solver run time is " << setprecision(4) << duration / (float)(1000000) << " seconds" << endl;
+    cout << "Total enumerated nodes are " << enumerated_nodes;
     cout << endl;
 }
 
@@ -307,9 +306,8 @@ void solver::retrieve_input(string filename) {
     for (int i = 0; i < (int)file_matrix.size(); i++) {
         int j = 0;
         for (auto edge_weight: file_matrix[i]) {
-            hung_graph[i].push_back(edge(i,j,edge_weight));
             if (edge_weight < 0) {
-                cost_graph[i].push_back(edge(i,j,file_matrix[j][i]));
+                cost_graph[i].push_back(edge(i,j,-1));
                 dependent_graph[j].push_back(i);
             }
             else { 
@@ -333,54 +331,66 @@ void solver::retrieve_input(string filename) {
 }
 
 void solver::transitive_redundantcy() {
-    stack<int> dfs_stack;
-    stat visit_arr[node_count];
-
-    for (int i = 0; i < node_count; i++) {
-        visit_arr[i] = stat::access;
-    }
-
-    for (int i = 0; i < node_count; i++) {
-
-        for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
-            dfs_stack.push(dependent_graph[i][k]);
-            visit_arr[dependent_graph[i][k]] = stat::no_access;
-        }
-
-        //Use DFS on each and every node to fix transitive redundantcy.
-        while (!dfs_stack.empty()) {
-            int node_num = dfs_stack.top();
-            dfs_stack.pop();
-
-            if (visit_arr[node_num] == stat::no_access) visit_arr[node_num] = stat::access;
-            // Remove redundent edges in the graph
-            else if (find(dependent_graph[i].begin(),dependent_graph[i].end(),node_num) != dependent_graph[i].end()) {
-                    for (auto k = dependent_graph[i].begin(); k != dependent_graph[i].end(); k++) {
-                        if (*k == node_num) {
-                            dependent_graph[i].erase(k);
-                            break;
-                        }
-                    }
-            }
-
-            for (long unsigned int k = 0; k < dependent_graph[node_num].size(); k++) {
-                dfs_stack.push(dependent_graph[node_num][k]);
-            }
-        }
-        //Clear visit_array for the iteration of the dfs.
-        for (int i = 0; i < node_count; i++) {
-            visit_arr[i] = stat::access;
-        }
-    }
-
-    in_degree = std::vector<vector<int>>(node_count);
-
+    in_degree = std::vector<vector<edge>>(node_count);
+    hung_graph = cost_graph;
     for (int i = 0; i < node_count; i++) {
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             int c = dependent_graph[i][k];
-            in_degree[c].push_back(i);
+            in_degree[c].push_back(edge(i,c,hung_graph[i][c].weight));
         }
     }
+
+    for(int i = 0; i < node_count; ++i) {
+        vector<edge> preceding_nodes;
+        for (int k = 0; k < dependent_graph[i].size(); k++) preceding_nodes.push_back(edge(i,dependent_graph[i][k],-1));
+        unordered_set<int> expanded_nodes;
+        for(int j = 0; j < preceding_nodes.size(); ++j){
+            vector<edge> st;
+            st.push_back(preceding_nodes[j]);
+            while(!st.empty()){
+                edge dependence_edge = st.back();
+                st.pop_back();
+                if(dependence_edge.src != i){
+                    hung_graph[dependence_edge.dest][i].weight = -1;
+                    hung_graph[i][dependence_edge.dest].weight = -1;
+                    expanded_nodes.insert(dependence_edge.dest);
+                }
+
+                for(int dest : dependent_graph[dependence_edge.dest]){
+                    if(expanded_nodes.find(dest) == expanded_nodes.end()){
+                        st.push_back(edge(dependence_edge.dest,dest,-1));
+                        expanded_nodes.insert(dest);
+                    }
+                }
+            }
+        } 
+    }
+
+    for(int i = 0; i < node_count; ++i){
+        const vector<edge> preceding_nodes = in_degree[i];
+        unordered_set<int> expanded_nodes;
+        for(int j = 0; j < preceding_nodes.size(); ++j){
+            vector<edge> st;
+            st.push_back(preceding_nodes[j]);
+            while(!st.empty()){
+                edge dependence_edge = st.back();
+                st.pop_back();
+                if(dependence_edge.src != i){
+                    hung_graph[i][dependence_edge.dest].weight = -1;
+                    hung_graph[dependence_edge.dest][i].weight = -1;
+                    expanded_nodes.insert(dependence_edge.dest);
+                }
+                for(const edge& e : in_degree[dependence_edge.dest]){
+                    if(expanded_nodes.find(e.dest) == expanded_nodes.end()){
+                        st.push_back(e);
+                        expanded_nodes.insert(e.dest);
+                    }
+                }
+            }
+        } 
+    }
+
+    return;
 }
 
 
@@ -481,6 +491,7 @@ void solver::print_dep() {
     }
 }
 
+/*
 int solver::mmcp_lb() {
     int outsum = 0;
     int insum = 0;
@@ -541,24 +552,22 @@ int solver::mmcp_lb() {
 
     return max(outsum-out_max,insum-in_max);
 }
+*/
 
 vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
+
     vector<vector<int>> matrix(node_count);
     for(int i = 0; i < node_count; ++i){
 		matrix[i] = vector<int>(node_count, max_edge_weight*2);
 	}
 
-    for (vector<edge> edge_list : cost_graph) {
+    for (vector<edge> edge_list : hung_graph) {
         for (auto edge : edge_list) {
-            int i = edge.retrieve_src();
-            int k = edge.retrieve_dest();
-            int x = hung_graph[i][k].retrieve_weight();
-            int y = hung_graph[k][i].retrieve_weight();
-            if (x != -1 && y != -1 && i != k) {
-                matrix[i][k] = x * 2;
-            }
-            else if (find(dependent_graph[i].begin(), dependent_graph[i].end(), k) != dependent_graph[i].end()) {
-                matrix[i][k] = x * 2;
+            int i = edge.src;
+            int k = edge.dest;
+            int weight = edge.weight;
+            if (weight != -1 && i != k) {
+                matrix[i][k] = weight * 2;
             }
         }
     }

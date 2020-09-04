@@ -7,11 +7,10 @@
 using namespace std;
 
 class edge {
-    private:
+    public:
         int src;
         int dest;
         int weight;
-    public:
         edge(int x, int y, int z): src{x},dest{y},weight{z} {}
         int retrieve_src();
         int retrieve_dest();
@@ -29,8 +28,8 @@ class solver {
         vector<int> best_solution;
         vector<int> cur_solution;
         enum stat {access,no_access};
-        vector<vector<int>> in_degree;
         vector<vector<int>> dependent_graph;
+        vector<vector<edge>> in_degree;
         vector<vector<edge>> hung_graph;
         vector<vector<edge>> cost_graph;
         Hungarian hungarian_solver;
@@ -40,7 +39,7 @@ class solver {
         bool LB_Check(int src, int dest);
         bool HistoryUtilization();
         int get_maxedgeweight();
-        int mmcp_lb();
+        //int mmcp_lb();
         int get_nodecount();
         int dynamic_hungarian(int src, int dest);
         void process_solution();
