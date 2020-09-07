@@ -12,6 +12,7 @@ class edge {
         int dest;
         int weight;
         edge(int x, int y, int z): src{x},dest{y},weight{z} {}
+        bool operator==(const edge &rhs) const {return this->src == rhs.src;}
         int retrieve_src();
         int retrieve_dest();
         int retrieve_weight();
@@ -39,7 +40,8 @@ class solver {
         bool LB_Check(int src, int dest);
         bool HistoryUtilization();
         int get_maxedgeweight();
-        //int mmcp_lb();
+        int dynamic_edb();
+        int mmcp_lb();
         int get_nodecount();
         int dynamic_hungarian(int src, int dest);
         void process_solution();

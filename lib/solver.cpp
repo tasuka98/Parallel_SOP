@@ -27,13 +27,16 @@ struct Hash {
 
 unordered_map<pair<int,int>,HistoryNode,Hash> history_table;
 bool optimal_found = false;
+bool static_cal = true;
 int graph_index = 0;
 int enumerated_nodes = 0;
+int calculated_bounds = 0;
+int recently_added = 0;
 
 vector<int> raedy_list;
+vector<bool> picked_list;
 int* depCnt;
 int* taken_arr;
-int current_lb = 0;
 
 void solver::process_solution() {
     if (cur_cost < best_cost) {
@@ -100,23 +103,36 @@ bool solver::LB_Check(int src, int dest) {
     bool decision = HistoryUtilization();
     if (!decision) return false;
     
-    int lower_bound = dynamic_hungarian(src,dest);
-    current_lb = lower_bound;
-
-    if (lower_bound >= best_cost) {
-        return false;
-    }
+    int lower_bound2 = dynamic_hungarian(src,dest);
+    
+    if (lower_bound2 >= best_cost) return false;
 
     /*
+
+    int lower_bound1 = dynamic_edb();
+
+    if (lower_bound1 + cur_cost >= best_cost) {
+    
+
         std::cout << "the current solution is";
-		for (int i : cur_solution) {
-			std::cout << i << ",";
-		}
-		std::cout << std::endl;
-		std::cout << "the lower bound is " << lower_bound << std::endl;
+        for (int i : cur_solution) {
+            std::cout << i << ",";
+        }
+        std::cout << std::endl;
+        std::cout << "the lower bound is " << lower_bound1 << std::endl;
+        calculated_bounds++;
+        return false;
+    }
     */
 
     return true;
+}
+
+int solver::dynamic_edb() {
+    int picked_node = cur_solution.back();
+    picked_list[picked_node] = true;
+    recently_added = picked_node;
+    return mmcp_lb();
 }
 
 void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
@@ -171,6 +187,8 @@ void solver::enumerate(int i) {
 
     if (!keep_explore) return;
 
+    enumerated_nodes++;
+
     vector<int> ready_list;
 
     for (int i = node_count-1; i >= 0; i--) {
@@ -188,8 +206,27 @@ void solver::enumerate(int i) {
 
     while(!ready_list.empty()) {
         //Take the choosen node;
-        taken_node = ready_list.back();
-        ready_list.pop_back();
+        
+        int bound = INT_MAX;
+        int location = 0;
+        if (!cur_solution.empty()) {
+            for (int i = 0; i < (int)ready_list.size(); i++) {
+                int dest = ready_list[i];
+                int src = cur_solution.back();
+                cur_solution.push_back(dest);
+                int temp_lb = dynamic_hungarian(src,dest);
+                if (temp_lb < bound) {
+                    bound = temp_lb;
+                    location = i;
+                }
+                cur_solution.pop_back();
+                hungarian_solver.undue_row(src,dest);
+                hungarian_solver.undue_column(dest,src);
+            }
+        }
+        
+        taken_node = ready_list[location];
+        ready_list.erase(ready_list.begin()+location);
         if (cur_solution.empty()) u = -1;
         else {
             u = cur_solution.back();
@@ -199,7 +236,7 @@ void solver::enumerate(int i) {
 
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
         cur_solution.push_back(taken_node);
-        
+
         taken_arr[taken_node] = 1;
 
         enumerate(i+1);
@@ -207,6 +244,7 @@ void solver::enumerate(int i) {
         //Untake the choosen node;
         v = taken_node = cur_solution.back();
         u = cur_solution.end()[-2];
+        picked_list[v] = false;
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
         taken_arr[taken_node] = 0;
         hungarian_solver.solve_dynamic();
@@ -220,7 +258,6 @@ void solver::enumerate(int i) {
             //Revert previous hungarian operations
             hungarian_solver.undue_row(u,v);
 		    hungarian_solver.undue_column(v,u);
-            enumerated_nodes++;
         }
         cur_solution.pop_back();
     }
@@ -235,8 +272,8 @@ void solver::solve(string filename) {
     int max_edge_weight = get_maxedgeweight();
     hungarian_solver = Hungarian(node_count, max_edge_weight+1, get_cost_matrix(max_edge_weight+1));
     MMCP_static_lowerbound = hungarian_solver.start()/2;
-    //EGB_static_lowerbound = mmcp_lb();
-    current_lb = MMCP_static_lowerbound;
+    picked_list = vector<bool>(node_count,false);
+    EGB_static_lowerbound = mmcp_lb();
 
     depCnt = new int[node_count];
     taken_arr = new int[node_count];
@@ -255,7 +292,7 @@ void solver::solve(string filename) {
         else cout << best_solution[i];
     }
     cout << endl;
-    //cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
+    cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
     cout << "MMCP-based LB is " << MMCP_static_lowerbound << endl;
 
     cur_cost = 0;
@@ -273,8 +310,8 @@ void solver::solve(string filename) {
     }
     cout << endl;
     cout << "B&B solver run time is " << setprecision(4) << duration / (float)(1000000) << " seconds" << endl;
-    cout << "Total enumerated nodes are " << enumerated_nodes;
-    cout << endl;
+    cout << "Total enumerated nodes are " << enumerated_nodes << endl;
+    cout << "Total calculated bounds are " << calculated_bounds << endl;
 }
 
 void solver::retrieve_input(string filename) {
@@ -307,11 +344,13 @@ void solver::retrieve_input(string filename) {
         int j = 0;
         for (auto edge_weight: file_matrix[i]) {
             if (edge_weight < 0) {
-                cost_graph[i].push_back(edge(i,j,-1));
+                cost_graph[i].push_back(edge(i,j,file_matrix[j][i]));
+                hung_graph[i].push_back(edge(i,j,-1));
                 dependent_graph[j].push_back(i);
             }
             else { 
                 cost_graph[i].push_back(edge(i,j,edge_weight));
+                hung_graph[i].push_back(edge(i,j,edge_weight));
             }
             j++;
         }
@@ -332,7 +371,6 @@ void solver::retrieve_input(string filename) {
 
 void solver::transitive_redundantcy() {
     in_degree = std::vector<vector<edge>>(node_count);
-    hung_graph = cost_graph;
     for (int i = 0; i < node_count; i++) {
         for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
             int c = dependent_graph[i][k];
@@ -342,9 +380,9 @@ void solver::transitive_redundantcy() {
 
     for(int i = 0; i < node_count; ++i) {
         vector<edge> preceding_nodes;
-        for (int k = 0; k < dependent_graph[i].size(); k++) preceding_nodes.push_back(edge(i,dependent_graph[i][k],-1));
+        for (int k = 0; k < (int)dependent_graph[i].size(); k++) preceding_nodes.push_back(edge(i,dependent_graph[i][k],-1));
         unordered_set<int> expanded_nodes;
-        for(int j = 0; j < preceding_nodes.size(); ++j){
+        for(int j = 0; j < (int)preceding_nodes.size(); ++j){
             vector<edge> st;
             st.push_back(preceding_nodes[j]);
             while(!st.empty()){
@@ -369,7 +407,7 @@ void solver::transitive_redundantcy() {
     for(int i = 0; i < node_count; ++i){
         const vector<edge> preceding_nodes = in_degree[i];
         unordered_set<int> expanded_nodes;
-        for(int j = 0; j < preceding_nodes.size(); ++j){
+        for(int j = 0; j < (int)preceding_nodes.size(); ++j){
             vector<edge> st;
             st.push_back(preceding_nodes[j]);
             while(!st.empty()){
@@ -491,13 +529,15 @@ void solver::print_dep() {
     }
 }
 
-/*
+
 int solver::mmcp_lb() {
     int outsum = 0;
     int insum = 0;
     int out_array[node_count];
     int in_array[node_count];
     int depCnt_arr[node_count];
+    bool trim_in = true;
+    bool trim_out = true;
     
     memset(depCnt_arr,0,node_count*sizeof(int));
     for (int i = 0; i < node_count; i++) {
@@ -509,50 +549,87 @@ int solver::mmcp_lb() {
     int out_max = 0;
     int in_max = 0;
 
-    for (int i = 0; i < node_count; i++) {
-        int min = INT_MAX;
+    out_array[0] = 0;
+    out_array[node_count-1] = 0;
+    in_array[0] = 0;
+    in_array[node_count-1] = 0;
 
 
-        for (auto dest : dependent_graph[i]) {
-            int weight = cost_graph[i][dest].retrieve_weight();
-            if (weight < min) min = weight;
+    for (int i = 1; i < node_count - 1; i++) {
+        int min_out = INT_MAX;
+        int min_in = INT_MAX;
+        bool calculate_in = true;
+        bool calculate_out = true;
+
+
+        if (picked_list[i]) {
+            calculate_in = false;
+            trim_in = false;
+            if (recently_added != i) {
+                calculate_out = false;
+                trim_out = false;
+            }
         }
 
-        for (int k = 0; k < node_count; k++) {
+
+        for (int k = 1; k < node_count - 1; k++) {
             int weight = cost_graph[i][k].retrieve_weight();
-            if (find(dependent_graph[k].begin(),dependent_graph[k].end(),i) == dependent_graph[k].end()) {
-                if (k != i && depCnt_arr[k] == 0 && weight < min) min = weight;
+            if (calculate_out) {
+                if (find(in_degree[i].begin(),in_degree[i].end(),edge(k,i,-1)) == in_degree[i].end()) {
+                    if (k != i && weight < min_out && !picked_list[k]) min_out = weight;
+                }
             }
-        }
-
-        out_array[i] = min;
-
-        min = INT_MAX;
-        for (auto dest : in_degree[i]) {
-            int weight = cost_graph[dest][i].retrieve_weight();
-            if (weight < min) min = weight;
-        }
-
-        for (int k = 0; k < node_count; k++) {
-            int weight = cost_graph[k][i].retrieve_weight();
-            if (find(in_degree[k].begin(),in_degree[k].end(),i) == dependent_graph[k].end()) {
-                if (k != i && depCnt_arr[k] == 0 && weight < min) min = weight;
+            
+            if (calculate_in) {
+                if (find(in_degree[k].begin(),in_degree[k].end(),edge(i,k,-1)) == in_degree[k].end()) {
+                    if (recently_added == k && k != i && weight < min_in) {
+                        min_in = weight;
+                    }
+                    else if (!picked_list[k] && k != i && weight < min_in) {
+                        min_in = weight;
+                    }
+                }
             }
+            
         }
 
-        in_array[i] = min;
+        if (min_out == INT_MAX) {
+            trim_out = false;
+            min_out = 0;
+        }
+
+        if (min_in == INT_MAX) {
+            trim_in = false;
+            min_out = 0;
+        }
+
+        
+        if (calculate_in) in_array[i] = min_in;
+        else in_array[i] = 0;
+
+        if (calculate_out) out_array[i] = min_out;
+        else out_array[i] = 0;
+        
     }
 
-    for (int i = 0; i < node_count; i++) {
-        if (!dependent_graph[i].size() && out_array[i] > out_max) out_max = out_array[i];
-        if (!depCnt_arr[i] && in_array[i] > in_max) in_max = in_array[i];
+    for (int i = 1; i < node_count - 1; i++) {
+        if (dependent_graph[i].size() == 1 && dependent_graph[i][0] == node_count-1 && out_array[i] > out_max) {
+            out_max = out_array[i];
+        }
+        if (depCnt_arr[i] == 1 && in_degree[i][0].src == 0 && in_array[i] > in_max) {
+            in_max = in_array[i];
+        }
         outsum += out_array[i];
         insum += in_array[i];
     }
 
+    if (trim_in == false && trim_out == false) return max(outsum,insum);
+    else if (trim_in == false) return max(outsum-out_max,insum);
+    else if (trim_out == false) return max(outsum,insum-in_max);
+    
     return max(outsum-out_max,insum-in_max);
 }
-*/
+
 
 vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
 
