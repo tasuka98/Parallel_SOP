@@ -13,9 +13,6 @@ class edge {
         int weight;
         edge(int x, int y, int z): src{x},dest{y},weight{z} {}
         bool operator==(const edge &rhs) const {return this->src == rhs.src;}
-        int retrieve_src();
-        int retrieve_dest();
-        int retrieve_weight();
 };
 
 
@@ -28,7 +25,6 @@ class solver {
         int best_cost;
         vector<int> best_solution;
         vector<int> cur_solution;
-        enum stat {access,no_access};
         vector<vector<int>> dependent_graph;
         vector<vector<edge>> in_degree;
         vector<vector<edge>> hung_graph;
@@ -41,9 +37,8 @@ class solver {
         bool HistoryUtilization();
         int get_maxedgeweight();
         int dynamic_edb();
-        int mmcp_lb();
-        int get_nodecount();
         int dynamic_hungarian(int src, int dest);
+        int mmcp_lb();
         void process_solution();
         void assign_historytable(int prefix_cost,int lower_bound,int i);
         void enumerate(int i);
@@ -52,5 +47,4 @@ class solver {
         void transitive_redundantcy();
         void sort_weight(vector<vector<edge>>& graph);
         void print_dep();
-        
 };

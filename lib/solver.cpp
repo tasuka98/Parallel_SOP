@@ -27,7 +27,6 @@ struct Hash {
 
 unordered_map<pair<int,int>,HistoryNode,Hash> history_table;
 bool optimal_found = false;
-bool static_cal = true;
 int graph_index = 0;
 int enumerated_nodes = 0;
 int calculated_bounds = 0;
@@ -160,7 +159,7 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
         suffix_sched.push_back(root_node);
         for (int k = i+1; k < node_count; k++) {
             suffix_sched.push_back(cur_solution[k]);
-            suffix_cost += cost_graph[root_node][k].retrieve_weight();
+            suffix_cost += cost_graph[root_node][k].weight;
             root_node = k;
         }
         history_table.insert({make_pair(conversion,last_element),HistoryNode(prefix_cost,suffix_cost,lower_bound,cur_solution,suffix_sched)});
@@ -231,7 +230,7 @@ void solver::enumerate(int i) {
         else {
             u = cur_solution.back();
             v = taken_node;
-            cur_cost += cost_graph[u][v].retrieve_weight();
+            cur_cost += cost_graph[u][v].weight;
         }
 
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
@@ -254,7 +253,7 @@ void solver::enumerate(int i) {
         assign_historytable(cur_cost,cur_lb,i);
 
         if (u != -1) {
-            cur_cost -= cost_graph[u][v].retrieve_weight();
+            cur_cost -= cost_graph[u][v].weight;
             //Revert previous hungarian operations
             hungarian_solver.undue_row(u,v);
 		    hungarian_solver.undue_column(v,u);
@@ -354,14 +353,7 @@ void solver::retrieve_input(string filename) {
             }
             j++;
         }
-    }/*
-    for (int i = 0; i < cost_graph.size(); i++) {
-        cout << "node " << i << "has: ";
-        for (edge node : cost_graph[i]) {
-            cout << node.retrieve_weight() << "->";
-        }
-        cout << endl;
-    }*/
+    }
     node_count = cost_graph.size();
 
     //Trim redundant edges
@@ -433,8 +425,8 @@ void solver::transitive_redundantcy() {
 
 
 bool compare (edge src, edge target) {
-    int src_weight = src.retrieve_weight();
-    int dest_weight = target.retrieve_weight();
+    int src_weight = src.weight;
+    int dest_weight = target.weight;
 
     return (src_weight < dest_weight);
 }
@@ -487,12 +479,12 @@ vector<int> solver::nearest_neightbor() {
             depCnt_arr[dependent_graph[current_node][i]]--;
         }
         for (auto node: sorted_costgraph[current_node]) {
-            if (!visit_arr[node.retrieve_dest()] && !depCnt_arr[node.retrieve_dest()]) {
-                current_node = node.retrieve_dest();
-                solution_cost += node.retrieve_weight();
+            if (!visit_arr[node.dest] && !depCnt_arr[node.dest]) {
+                current_node = node.dest;
+                solution_cost += node.weight;
                 solution.push_back(current_node);
                 num++;
-                visit_arr[node.retrieve_dest()] = true;
+                visit_arr[node.dest] = true;
                 break;
             }
         }
@@ -507,15 +499,11 @@ int solver::get_maxedgeweight() {
     int max = 0;
     for (int i = 0; i < node_count; i++) {
         for (auto edge_weight : cost_graph[i]) {
-            int weight = edge_weight.retrieve_weight();
+            int weight = edge_weight.weight;
             if (weight > max) max = weight;
         }
     }
     return max;
-}
-
-int solver::get_nodecount() {
-    return node_count;
 }
 
 void solver::print_dep() {
@@ -573,7 +561,7 @@ int solver::mmcp_lb() {
 
 
         for (int k = 1; k < node_count - 1; k++) {
-            int weight = cost_graph[i][k].retrieve_weight();
+            int weight = cost_graph[i][k].weight;
             if (calculate_out) {
                 if (find(in_degree[i].begin(),in_degree[i].end(),edge(k,i,-1)) == in_degree[i].end()) {
                     if (k != i && weight < min_out && !picked_list[k]) min_out = weight;
@@ -661,16 +649,3 @@ vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
     
     return matrix;
 }
-
-int edge::retrieve_weight() {
-    return weight;
-}
-
-int edge::retrieve_src() {
-    return src;
-}
-
-int edge::retrieve_dest() {
-    return dest;
-}
-    

@@ -1,2 +1,5 @@
 .idea
 *.o
+.vscode
+sop_solver
+
