@@ -1,5 +1,4 @@
 .idea
 *.o
-.vscode/
-./sop_solver
+sop_solver
 
