@@ -9,7 +9,11 @@ using namespace std;
 int main(int argc, char*argv[]) {
     solver s;
     
-    s.solve(argv[1]);
+    if (argc < 4) {
+        cout << "Input Argument Incorrect";
+        exit(-1);
+    }
+    s.solve(argv[1],argv[2],atoi(argv[3]));
     
     
     return 0;

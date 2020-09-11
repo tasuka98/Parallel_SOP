@@ -15,7 +15,7 @@ $(PROG): $(OBJS)
 main.o: $(SRC)/main.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
-solver.o: $(LIB)/solver.cpp
+solver.o: $(LIB)/solver.cpp $(LIB)/hash.hpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
 hungarian.o: $(LIB)/hungarian.cpp
