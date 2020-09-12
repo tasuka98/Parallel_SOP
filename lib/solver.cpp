@@ -341,6 +341,7 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
             depCnt[dependent_graph[i][k]]++;
         }
     }
+    /*
     cout << "best solution found using NN is " << best_cost << endl;
     cout << "the NN solution contains ";
     for (int i = 0; i < node_count; i++) {
@@ -350,7 +351,7 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     cout << endl;
     cout << "Edge-based LB is " << EGB_static_lowerbound << endl;
     cout << "MMCP-based LB is " << MMCP_static_lowerbound << endl;
-
+    */
     cur_cost = 0;
 
     if (setjmp(buf)) {
@@ -360,17 +361,19 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
         enumerate(0);
     }
 
-    cout << "optimal solution using B&B is " << best_cost << endl;
+    cout << "optimal cost is " << best_cost;
 
+    /*
     cout << "the optimal solution contains ";
     for (int i = 0; i < node_count; i++) {
         if (i != node_count - 1) cout << best_solution[i] << "-->";
         else cout << best_solution[i];
     }
     cout << endl;
-    cout << "B&B solver run time is " << setprecision(4) << eclipsed_time / (float)(1000000) << " seconds" << endl;
-    cout << "Total enumerated nodes are " << enumerated_nodes << endl;
-    cout << "Total calculated bounds are " << calculated_bounds << endl;
+    */
+    cout << " run time is " << setprecision(4) << eclipsed_time / (float)(1000000) << " seconds" << endl;
+    //cout << "Total enumerated nodes are " << enumerated_nodes << endl;
+    //cout << "Total calculated bounds are " << calculated_bounds << endl;
 }
 
 void solver::retrieve_input(string filename) {

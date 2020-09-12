@@ -25,8 +25,10 @@ int main(int argc, char*argv[]) {
 
     for (int i = 0; i < sizeof(Compiler)/sizeof(Compiler[0]); i++) {
         cout << Compiler[i] << " ";
-        s.solve("./mibench/"+Compiler[i],"DH",7200);
+        s.solve("./mibench/"+Compiler[i],"RD",7200);
     }
+    
+    
     
     return 0;
 }
