@@ -1,4 +1,5 @@
 #include <vector>
+#include <unordered_map>
 #include <list>
 #include "history.hpp"
 
@@ -22,6 +23,7 @@ Hash_Map::Hash_Map(int size) {
     History_table.resize(size);
 }
 
+/*
 uint32_t Hash_Map::hash_func(pair<string,int> item) {
     uint32_t hash, i;
     string key = item.first;
@@ -36,16 +38,17 @@ uint32_t Hash_Map::hash_func(pair<string,int> item) {
     hash += (hash << 15);
     return hash;
 }
+*/
 
 void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
-    uint32_t val = hash_func(item);
+    size_t val = hash<string>{}(item.first);
     int key = val % size;
     bool exist = false;
     if (!History_table[key].size()) {
         History_table[key].push_back(make_pair(item,node));
         return;
     }
-    for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {
+    for (auto iter = History_table[key].begin(); iter != History_table[key].end(); iter++) {
         string permutation_src = item.first;
         string permutation_dest = iter->first.first;
         int ending_src = item.second;
@@ -65,7 +68,7 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
 }
 
 HistoryNode Hash_Map::retrieve(pair<string,int> item) {
-    uint32_t val = hash_func(item);
+    size_t val = hash<string>{}(item.first);
     int key = val % size;
 
     for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {
@@ -77,12 +80,12 @@ HistoryNode Hash_Map::retrieve(pair<string,int> item) {
             return iter->second;
         }
     }
-
+    
     return HistoryNode();
 }
 
 bool Hash_Map::find(pair<string,int> item) {
-    uint32_t val = hash_func(item);
+    size_t val = hash<string>{}(item.first);
     int key = val % size;
 
     for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {

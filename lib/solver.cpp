@@ -12,21 +12,9 @@
 #include <vector>
 #include <bits/stdc++.h>
 #include <unordered_map>
-#include<setjmp.h> 
-
-
+#include<setjmp.h>
 
 using namespace std;
-
-struct Hash { 
-    template <class T1, class T2> 
-    size_t operator()(const pair<T1, T2>& p) const
-    { 
-        auto hash1 = hash<T1>{}(p.first); 
-        auto hash2 = hash<T2>{}(p.second); 
-        return hash1 ^ hash2; 
-    } 
-}; 
 
 Hash_Map history_table(1237935);
 bool optimal_found = false;
@@ -147,6 +135,12 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
 
     int last_element = cur_solution.back();
     auto key = make_pair(bit_string,last_element);
+    
+    if (history_table.find(key)) {
+        auto history_node = history_table.retrieve(key);
+        if (history_node.prefix_cost < prefix_cost) return;
+    }
+   
 
     if ((int)cur_solution.size() != node_count) {
         history_table.insert(key,HistoryNode(prefix_cost,lower_bound,cur_solution));
@@ -234,6 +228,9 @@ void solver::enumerate(int i) {
                         bound = temp_lb;
                         location = i;
                     }
+                    else if (temp_lb == bound && cost_graph[src][dest].weight <= cost_graph[src][ready_list[location]].weight) {
+                        location = i;
+                    }
                     cur_solution.pop_back();
                     hungarian_solver.undue_row(src,dest);
                     hungarian_solver.undue_column(dest,src);
@@ -267,8 +264,13 @@ void solver::enumerate(int i) {
 
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
         cur_solution.push_back(taken_node);
-
         taken_arr[taken_node] = 1;
+        ///////
+
+        //for (auto node : cur_solution) cout << node << ",";
+        //cout << endl;
+
+        //////
 
         end_time = chrono::high_resolution_clock::now();
         eclipsed_time += long(chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count());
