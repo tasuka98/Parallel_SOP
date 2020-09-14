@@ -36,7 +36,7 @@ class solver {
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
         vector<int> nearest_neightbor();
         bool LB_Check(int src, int dest);
-        bool HistoryUtilization();
+        bool HistoryUtilization(int* lowerbound);
         int get_maxedgeweight();
         int dynamic_edb();
         int dynamic_hungarian(int src, int dest);

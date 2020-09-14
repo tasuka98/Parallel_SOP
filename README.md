@@ -2,4 +2,4 @@
 
 ## Usage
 - `make`
-- `./sop_solver *.sop`
+- `./sop_solver <instant name> <heuristic> <time limit>`

@@ -45,7 +45,7 @@ int solver::dynamic_hungarian(int src, int dest) {
     return hungarian_solver.get_matching_cost()/2;
 }
 
-bool solver::HistoryUtilization() {
+bool solver::HistoryUtilization(int* lowerbound) {
     string bit_string(node_count, '0');
 
     for (auto node : cur_solution) {
@@ -70,6 +70,7 @@ bool solver::HistoryUtilization() {
     history_node.prefix_sched = cur_solution;
     history_node.prefix_cost = cur_cost;
     history_node.lower_bound = history_lb - imp;
+    *lowerbound = history_node.lower_bound;
     
     if (!history_node.suffix_sched.empty()) {
         vector<int> temp = cur_solution;
@@ -79,6 +80,7 @@ bool solver::HistoryUtilization() {
         best_solution = temp;
         best_cost = cur_cost + suffix_cost;
         history_node.lower_bound = best_cost;
+        *lowerbound = history_node.lower_bound;
         return false;
     }
 
@@ -90,13 +92,15 @@ bool solver::HistoryUtilization() {
 bool solver::LB_Check(int src, int dest) {
     if (cur_cost > best_cost) return false;
     //Dyanmic hungarian lower bound
-
-    bool decision = HistoryUtilization();
+    int LB1 = 0;
+    bool decision = HistoryUtilization(&LB1);
     if (!decision) return false;
+
+    if (LB1 >= best_cost) return false;
     
-    int lower_bound2 = dynamic_hungarian(src,dest);
-    
-    if (lower_bound2 >= best_cost) return false;
+    int LB2 = dynamic_hungarian(src,dest);
+
+    if (LB2 >= best_cost) return false;
 
     /*
 
@@ -166,7 +170,7 @@ void solver::enumerate(int i) {
 
     if (optimal_found) return;
 
-    auto start_time = chrono::high_resolution_clock::now();
+    //auto start_time = chrono::high_resolution_clock::now();
 
     if (i == node_count) {
         process_solution();
@@ -201,19 +205,21 @@ void solver::enumerate(int i) {
     int u = 0;
     int v = 0;
 
-    auto end_time = chrono::high_resolution_clock::now();
-    eclipsed_time += long(chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count());
+    //auto end_time = chrono::high_resolution_clock::now();
+    //eclipsed_time += long(chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count());
 
+    /*
     if (eclipsed_time > t_limit) {
         cout << "total time is "<<  eclipsed_time << endl;
         optimal_found = true;
-        //longjmp(buf, 1);
+        longjmp(buf, 1);
         return;
     }
+    */
 
     while(!ready_list.empty()) {
         //Take the choosen node;
-        start_time = chrono::high_resolution_clock::now();
+        //start_time = chrono::high_resolution_clock::now();
 
         int bound = INT_MAX;
         int location = 0;
@@ -272,22 +278,23 @@ void solver::enumerate(int i) {
 
         //////
 
-        end_time = chrono::high_resolution_clock::now();
-        eclipsed_time += long(chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count());
-
+        //end_time = chrono::high_resolution_clock::now();
+        //eclipsed_time += long(chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count());
+        
+        /*
         if (eclipsed_time > t_limit) {
             cout << "total time is "<<  eclipsed_time << endl;
             optimal_found = true;
-            //longjmp(buf, 1);
+            longjmp(buf, 1);
             return;
         }
-        
+        */
 
         enumerate(i+1);
 
         if (optimal_found) return;
         
-        start_time = chrono::high_resolution_clock::now();
+        //start_time = chrono::high_resolution_clock::now();
         //Untake the choosen node;
         v = taken_node = cur_solution.back();
         u = cur_solution.end()[-2];
@@ -308,15 +315,17 @@ void solver::enumerate(int i) {
         }
         cur_solution.pop_back();
 
-        end_time = chrono::high_resolution_clock::now();
-        eclipsed_time += long(chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count());
+        //end_time = chrono::high_resolution_clock::now();
+        //eclipsed_time += long(chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count());
 
+        /*
         if (eclipsed_time > t_limit) {
             cout << "total time is "<<  eclipsed_time << endl;
             optimal_found = true;
-            //longjmp(buf, 1);
+            longjmp(buf, 1);
             return;
         }
+        */
     }
     
     return;
@@ -356,14 +365,12 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     */
     cur_cost = 0;
 
-    if (setjmp(buf)) {
-        cout << "Timed out!" << endl;
-    }
-    else {
-        enumerate(0);
-    }
+    auto start_time = chrono::high_resolution_clock::now();
+    enumerate(0);
+    auto end_time = chrono::high_resolution_clock::now();
+    auto total_time = chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count();
 
-    cout << "optimal cost is " << best_cost;
+    cout << enum_opt << ": " << best_cost << "," << setprecision(4) << total_time / (float)(1000000) << endl;
 
     /*
     cout << "the optimal solution contains ";
@@ -373,7 +380,7 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     }
     cout << endl;
     */
-    cout << " run time is " << setprecision(4) << eclipsed_time / (float)(1000000) << " seconds" << endl;
+
     //cout << "Total enumerated nodes are " << enumerated_nodes << endl;
     //cout << "Total calculated bounds are " << calculated_bounds << endl;
 }
