@@ -36,11 +36,12 @@ class solver {
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
         vector<int> nearest_neightbor();
         bool LB_Check(int src, int dest);
-        bool HistoryUtilization(int* lowerbound);
+        bool HistoryUtilization(int* lowerbound,bool* found);
         int get_maxedgeweight();
         int dynamic_edb();
         int dynamic_hungarian(int src, int dest);
         int mmcp_lb();
+        int History_LB();
         void process_solution();
         void assign_historytable(int prefix_cost,int lower_bound,int i);
         void enumerate(int i);

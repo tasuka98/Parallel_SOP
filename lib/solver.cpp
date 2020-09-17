@@ -24,6 +24,10 @@ int calculated_bounds = 0;
 int recently_added = 0;
 long eclipsed_time = 0;
 
+HistoryNode visted;
+bool HG_lb = false;
+int lb = 0;
+
 jmp_buf buf;
 vector<int> raedy_list;
 vector<bool> picked_list;
@@ -45,7 +49,36 @@ int solver::dynamic_hungarian(int src, int dest) {
     return hungarian_solver.get_matching_cost()/2;
 }
 
-bool solver::HistoryUtilization(int* lowerbound) {
+int solver::History_LB() {
+    string bit_string(node_count, '0');
+
+    for (auto node : cur_solution) {
+        bit_string[node] = '1';
+    }   
+
+    int last_element = cur_solution.back();
+    auto key = make_pair(bit_string,last_element);
+
+    if (!history_table.find(key)) return -1;
+    
+    HistoryNode history_node = history_table.retrieve(key);
+
+    int history_prefix = history_node.prefix_cost;
+    int history_lb = history_node.lower_bound;
+
+    if (cur_cost >= history_prefix) return history_lb;
+
+    int imp = history_prefix - cur_cost;
+    
+    if (imp <= history_lb - best_cost) return history_lb;
+    history_node.prefix_sched = cur_solution;
+    history_node.prefix_cost = cur_cost;
+    history_node.lower_bound = history_lb - imp;
+    
+    return history_node.lower_bound;
+}
+
+bool solver::HistoryUtilization(int* lowerbound,bool* found) {
     string bit_string(node_count, '0');
 
     for (auto node : cur_solution) {
@@ -59,8 +92,10 @@ bool solver::HistoryUtilization(int* lowerbound) {
 
     HistoryNode history_node = history_table.retrieve(key);
 
+    *found = true;
     int history_prefix = history_node.prefix_cost;
     int history_lb = history_node.lower_bound;
+    *lowerbound = history_lb;
 
     if (cur_cost >= history_prefix) return false;
 
@@ -92,15 +127,17 @@ bool solver::HistoryUtilization(int* lowerbound) {
 bool solver::LB_Check(int src, int dest) {
     if (cur_cost > best_cost) return false;
     //Dyanmic hungarian lower bound
-    int LB1 = 0;
-    bool decision = HistoryUtilization(&LB1);
-    if (!decision) return false;
+    int LB = 0;
+    bool found = false;
+    bool decision = HistoryUtilization(&LB,&found);
 
-    if (LB1 >= best_cost) return false;
-    
-    int LB2 = dynamic_hungarian(src,dest);
-
-    if (LB2 >= best_cost) return false;
+    if (found) {
+        if (!decision) return false;
+    }
+    else {
+        LB = dynamic_hungarian(src,dest);
+        if (LB >= best_cost) return false;
+    }
 
     /*
 
@@ -229,25 +266,26 @@ void solver::enumerate(int i) {
                     int dest = ready_list[i];
                     int src = cur_solution.back();
                     cur_solution.push_back(dest);
-                    int temp_lb = dynamic_hungarian(src,dest);
-                    if (temp_lb < bound) {
+                    int temp_lb = History_LB();
+                    if (temp_lb == -1) {
+                        temp_lb = dynamic_hungarian(src,dest);
+                        hungarian_solver.undue_row(src,dest);
+                        hungarian_solver.undue_column(dest,src);
+                    }
+                    cur_solution.pop_back();
+                    if (temp_lb <= bound) {
                         bound = temp_lb;
                         location = i;
                     }
-                    else if (temp_lb == bound && cost_graph[src][dest].weight <= cost_graph[src][ready_list[location]].weight) {
-                        location = i;
-                    }
-                    cur_solution.pop_back();
-                    hungarian_solver.undue_row(src,dest);
-                    hungarian_solver.undue_column(dest,src);
                 }
             }
             else if (enum_option == "NN") {
+                HG_lb = false;
                 int min = INT_MAX;
                 for (int i = 0; i < (int)ready_list.size(); i++) {
                     int dest = ready_list[i];
                     int src = cur_solution.back();
-                    if (cost_graph[src][dest].weight < min) {
+                    if (cost_graph[src][dest].weight <= min) {
                         min = cost_graph[src][dest].weight;
                         location = i;
                     }
@@ -291,6 +329,7 @@ void solver::enumerate(int i) {
         */
 
         enumerate(i+1);
+        HG_lb = false;
 
         if (optimal_found) return;
         
