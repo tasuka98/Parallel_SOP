@@ -1,8 +1,9 @@
 CC = g++
-LINK = $(CC) -o
-CXX_VERSION = -std=c++11
-OPTIMIZATION = -O3 -Og -pg
-CXXFLAG = -c -g $(CXX_VERSION) -Wall
+LINK = -o
+CXX_VERSION = -std=c++14
+OPTIMIZATION = -O3 -c
+OPTIMIZATION_LINK = -O3
+CXXFLAG = -Wall $(CXX_VERSION)
 SRC = ./src
 LIB = ./lib
 
@@ -10,7 +11,7 @@ OBJS = main.o solver.o hungarian.o history.o
 PROG = sop_solver
 
 $(PROG): $(OBJS)
-	$(LINK) $(PROG) $^
+	$(CC) $(CXXFLAG) $(OPTIMIZATION_LINK) $(LINK) $(PROG) $^
 
 main.o: $(SRC)/main.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
