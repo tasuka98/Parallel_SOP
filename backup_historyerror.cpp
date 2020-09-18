@@ -79,10 +79,6 @@ int solver::History_LB() {
     history_node.prefix_cost = cur_cost;
     history_node.lower_bound = history_lb - imp;
     
-    if (!history_node.suffix_sched.empty()) {
-        return cur_cost + history_node.suffix_cost;
-    }
-
     return history_node.lower_bound;
 }
 
@@ -115,9 +111,13 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
     history_node.lower_bound = history_lb - imp;
     *lowerbound = history_node.lower_bound;
     
-    if (!history_node.suffix_sched.empty()) {
+    if (!history_node.suffix_sched.empty() || suffix_exist) {
         vector<int> temp = cur_solution;
         vector<int> suffix_sched;
+        if (suffix_exist && (suffix_cost < history_node.suffix_cost)) {
+            history_node.suffix_sched = suffix;
+            history_node.suffix_cost = suffix_cost;
+        }
         suffix_sched = history_node.suffix_sched;
         int suf_cost = history_node.suffix_cost;
         temp.insert(temp.end(),suffix_sched.begin(),suffix_sched.end());
@@ -128,32 +128,22 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
         history_table.insert(key,history_node);
         return false;
     }
-    else {
-        if (suffix_exist) {
-             for (int i = suffix.size() - 1; i >= 0; i--) {
-                history_node.suffix_sched.push_back(suffix[i]);
-            }
-            history_node.suffix_cost = suffix_cost;
-            history_node.lower_bound = cur_cost + suffix_cost;
-            history_table.insert(key,history_node);
-            return false;
-        }
-    }
 
     history_table.insert(key,history_node);
     return true;
 }
 
-bool solver::LB_Check(int src, int dest) {
+bool solver::LB_Check(int src, int dest, bool* hung) {
     if (cur_cost > best_cost) return false;
     //Dyanmic hungarian lower bound
     int LB = 0;
     bool found = false;
     bool decision = HistoryUtilization(&LB,&found,false);
+    hungarian_solver.fix_row(src, dest);
+	hungarian_solver.fix_column(dest, src);
 
     if (found) {
         if (!decision) return false;
-        if (LB >= best_cost) return false;
     }
     else {
         hungarian_solver.solve_dynamic();
@@ -191,14 +181,22 @@ int solver::dynamic_edb() {
 
 void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
     bool taken = false;
-    int lb = 0;
+    bool prune = false;
 
-    if (suffix.empty()) HistoryUtilization(&lb,&taken,false);
-    else HistoryUtilization(&lb,&taken,true);
 
-    if (!taken) {
+    if (suffix.empty()) prune = HistoryUtilization(&lower_bound,&taken,false);
+    else prune = HistoryUtilization(&lower_bound,&taken,true);
+    
+
+    if (prune == false) {
+        return;
+    }
+    
+    if (!taken && prune) {
         string bit_string(node_count, '0');
-        for (auto node : cur_solution) bit_string[node] = '1';
+        for (auto node : cur_solution) {
+            bit_string[node] = '1';
+        }   
         int last_element = cur_solution.back();
         auto key = make_pair(bit_string,last_element);
     
@@ -209,7 +207,9 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
         else {
             std::vector<int> suffix_sched;
             int size = suffix_sched.size();
-            for (int i = size - 1; i >= 0; i--) suffix_sched.push_back(suffix[i]);
+            for (int i = size - 1; i >= 0; i--) {
+                suffix_sched.push_back(suffix[i]);
+            }
             history_table.insert(key,HistoryNode(prefix_cost,suffix_cost,prefix_cost+suffix_cost,cur_solution,suffix_sched));
         }
     }
@@ -217,14 +217,7 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
 }   
 
 bool bound_sort(const node& src,const node& dest) {
-    if (src.lb == dest.lb) {
-        return src.nc > dest.nc;
-    }
-    return src.lb > dest.lb;
-}
-
-bool nearest_sort(const node& src,const node& dest) {
-    return src.nc > dest.nc;
+    return src.lb < dest.lb;
 }
 
 void solver::enumerate(int i) {
@@ -232,17 +225,17 @@ void solver::enumerate(int i) {
         process_solution();
         return;
     }
-    
     /*
     bool keep_explore = true;
-    if (cur_solution.size() >= 2) {
+        if (cur_solution.size() >= 2) {
         int u = cur_solution.end()[-2];
         int v = cur_solution.back();
-        keep_explore = LB_Check(u,v);
+        keep_explore = LB_Check(u,v,&hung);
     }
 
     if (!keep_explore) return;
     */
+
     enumerated_nodes++;
 
     vector<node> ready_list;
@@ -264,11 +257,12 @@ void solver::enumerate(int i) {
         //Take the choosen node;
         //start_time = chrono::high_resolution_clock::now();
         int bound = INT_MAX;
+        int location = 0;
         
         if (!cur_solution.empty()) {
             if (enum_option == "DH") {
                 if (!calculate) {
-                    for (int i = 0; i < (int)ready_list.size(); i++) {
+                        for (int i = 0; i < (int)ready_list.size(); i++) {
                         node dest = ready_list[i];
                         int src = cur_solution.back();
                         cur_solution.push_back(dest.n);
@@ -303,39 +297,36 @@ void solver::enumerate(int i) {
                             i--;
                             continue;
                         }
-
                         cur_solution.pop_back();
                         cur_cost -= cost_graph[src][dest.n].weight;
-                        ready_list[i].nc = cost_graph[src][dest.n].weight;
                         ready_list[i].lb = temp_lb;
                     }
                     sort(ready_list.begin(),ready_list.end(),bound_sort);
-                   //for (auto k : ready_list) cout << k.lb << ",";
-                   // cout << endl;
                 }
             }
             
+            /*
             else if (enum_option == "NN") {
-                if (!calculate) {
-                    for (int i = 0; i < (int)ready_list.size(); i++) {
-                        int dest = ready_list[i].n;
-                        int src = cur_solution.back();
-
-                        if (cur_cost + cost_graph[src][dest].weight >= best_cost) {
-                            ready_list.erase(ready_list.begin()+i);
-                            i--;
-                            continue;
-                        }
-                        ready_list[i].nc = cost_graph[src][dest].weight;
+                int min = INT_MAX;
+                for (int i = 0; i < (int)ready_list.size(); i++) {
+                    int dest = ready_list[i];
+                    int src = cur_solution.back();
+                    if (cost_graph[src][dest].weight <= min) {
+                        min = cost_graph[src][dest].weight;
+                        location = i;
                     }
-                    if (!ready_list.empty()) sort(ready_list.begin(),ready_list.end(),nearest_sort);
                 }
+            }
+            */
+
+            else {
+                location = 0;
             }
         }
 
        //Back track if ready list is empty;
         if (ready_list.empty()) return;
-        bound = ready_list.back().lb;
+
         taken_node = ready_list.back().n;
         ready_list.pop_back();
         if (!cur_solution.empty()) {
@@ -354,19 +345,24 @@ void solver::enumerate(int i) {
         suffix_cost = 0;
         previous_snode = 0;
         ///////
-        
-        //cout << "current solution is";
-        //for (auto node : cur_solution) cout << node << ",";
-        //cout <<  endl;
-        
+
         /////
 
         enumerate(i+1);
         calculate = true;
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
         taken_arr[taken_node] = 0;
-        
-        
+        /*
+        cout << "current solution is";
+        for (auto node : cur_solution) cout << node << ",";
+        cout <<  endl;
+
+        cout << "suffix solution is";
+        for (auto node : suffix) cout << node << ",";
+        cout <<  endl;
+        cout << "suffix cost is " << suffix_cost;
+        cout <<  endl;
+        */
         
         assign_historytable(cur_cost,bound,i);
         if ((int)cur_solution.size() == node_count) {
@@ -385,6 +381,7 @@ void solver::enumerate(int i) {
 		    hungarian_solver.undue_column(v,u);
         }
     }
+    
     return;
 }
 
@@ -438,7 +435,7 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     cout << endl;
     */
 
-    cout << "Total enumerated nodes are " << enumerated_nodes << endl;
+    //cout << "Total enumerated nodes are " << enumerated_nodes << endl;
     //cout << "Total calculated bounds are " << calculated_bounds << endl;
 }
 

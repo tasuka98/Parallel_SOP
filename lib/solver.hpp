@@ -15,6 +15,14 @@ class edge {
         bool operator==(const edge &rhs) const {return this->src == rhs.src;}
 };
 
+class node {
+    public:
+        int n;
+        int lb;
+        int nc;
+        node(int x, int y): n{x},lb{y} {}
+};
+
 
 class solver {
     private:
@@ -36,7 +44,7 @@ class solver {
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
         vector<int> nearest_neightbor();
         bool LB_Check(int src, int dest);
-        bool HistoryUtilization(int* lowerbound,bool* found);
+        bool HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist);
         int get_maxedgeweight();
         int dynamic_edb();
         int dynamic_hungarian(int src, int dest);
