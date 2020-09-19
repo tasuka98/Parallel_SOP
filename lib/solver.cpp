@@ -127,6 +127,11 @@ bool solver::LB_Check(int src, int dest) {
         hungarian_solver.solve_dynamic();
         LB = hungarian_solver.get_matching_cost()/2;
         if (LB >= best_cost) return false;
+        string bit_string(node_count, '0');
+        for (auto node : cur_solution) bit_string[node] = '1';
+        int last_element = cur_solution.back();
+        auto key = make_pair(bit_string,last_element);
+        history_table.insert(key,HistoryNode(cur_cost,LB,cur_solution));
     }
 
     /*
@@ -255,7 +260,6 @@ void solver::enumerate(int i) {
                 
                 else {
                     bool decision = HistoryUtilization(&temp_lb,&taken,false);
-                    
                     if (!taken) {
                         string bit_string(node_count, '0');
                         for (auto node : cur_solution) bit_string[node] = '1';
@@ -273,7 +277,6 @@ void solver::enumerate(int i) {
                         i--;
                         continue;
                     }
-                    
                     if (temp_lb >= best_cost) {
                         cur_solution.pop_back();
                         cur_cost -= cost_graph[src][dest.n].weight;
@@ -281,7 +284,6 @@ void solver::enumerate(int i) {
                         i--;
                         continue;
                     }
-
                     cur_solution.pop_back();
                     cur_cost -= cost_graph[src][dest.n].weight;
                     ready_list[i].nc = cost_graph[src][dest.n].weight;
@@ -289,23 +291,38 @@ void solver::enumerate(int i) {
                 }
             }
             sort(ready_list.begin(),ready_list.end(),bound_sort);
-        //for (auto k : ready_list) cout << k.lb << ",";
-        // cout << endl;
         }
         
         else if (enum_option == "NN") {
+
             for (int i = 0; i < (int)ready_list.size(); i++) {
                 int dest = ready_list[i].n;
                 int src = cur_solution.back();
+                cur_cost += cost_graph[src][dest].weight;
+                cur_solution.push_back(dest);
 
-                if (cur_cost + cost_graph[src][dest].weight >= best_cost) {
+                if (cur_cost >= best_cost) {
+                    cur_cost -= cost_graph[src][dest].weight;
+                    cur_solution.pop_back();
                     ready_list.erase(ready_list.begin()+i);
                     i--;
                     continue;
                 }
+
+                else if (cur_solution.size() == node_count && cur_cost < best_cost) {
+                    best_solution = cur_solution;
+                    best_cost = cur_cost;
+                    cur_solution.pop_back();
+                    cur_cost -= cost_graph[src][dest].weight;
+                    ready_list.erase(ready_list.begin()+i);
+                    i--;
+                    continue;
+                }
+                cur_cost -= cost_graph[src][dest].weight;
+                cur_solution.pop_back();
                 ready_list[i].nc = cost_graph[src][dest].weight;
             }
-            if (!ready_list.empty()) sort(ready_list.begin(),ready_list.end(),nearest_sort);
+            sort(ready_list.begin(),ready_list.end(),nearest_sort);
         }
     }
 
@@ -313,11 +330,12 @@ void solver::enumerate(int i) {
         //Take the choosen node;
         //start_time = chrono::high_resolution_clock::now();
        //Back track if ready list is empty;
-        bound = ready_list.back().lb;
+        if (enum_option == "DH") bound = ready_list.back().lb;
+        else bound = -1;
+
         taken_node = ready_list.back().n;
         ready_list.pop_back();
         if (!cur_solution.empty()) {
-            
             u = cur_solution.back();
             v = taken_node;
             hungarian_solver.fix_row(u, v);
@@ -346,7 +364,12 @@ void solver::enumerate(int i) {
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
         taken_arr[taken_node] = 0;
         
-        assign_historytable(cur_cost,bound,i);
+        if (bound != -1) assign_historytable(cur_cost,bound,i);
+        else {
+            bound = hungarian_solver.get_matching_cost()/2;
+            assign_historytable(cur_cost,bound,i);
+        }
+        
         if ((int)cur_solution.size() == node_count) {
             full_solution = true;
             previous_snode = cur_solution.back();
