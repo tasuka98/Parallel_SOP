@@ -190,18 +190,18 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
 }   
 
 bool bound_sort(const node& src,const node& dest) {
-    if (src.lb == dest.lb) {
-        return src.nc > dest.nc;
-    }
+    if (src.lb == dest.lb) return src.nc > dest.nc;
     return src.lb > dest.lb;
 }
 
 bool nearest_sort(const node& src,const node& dest) {
+    if (src.nc == dest.nc) return src.lb > dest.lb;
     return src.nc > dest.nc;
 }
 
 void solver::enumerate(int i) {
     
+    /*
     if (enum_option != "DH") {
         bool keep_explore = true;
         if (cur_solution.size() >= 2) {
@@ -211,6 +211,7 @@ void solver::enumerate(int i) {
         }
         if (!keep_explore) return;
     }
+    */
     
     enumerated_nodes++;
 
@@ -230,7 +231,6 @@ void solver::enumerate(int i) {
 
     int bound = INT_MAX;
     if (!cur_solution.empty()) {
-        if (enum_option == "DH") {
             for (int i = 0; i < (int)ready_list.size(); i++) {
                 node dest = ready_list[i];
                 int src = cur_solution.back();
@@ -290,9 +290,11 @@ void solver::enumerate(int i) {
                     ready_list[i].lb = temp_lb;
                 }
             }
-            sort(ready_list.begin(),ready_list.end(),bound_sort);
+            if (enum_option == "DH") sort(ready_list.begin(),ready_list.end(),bound_sort);
+            else if (enum_option == "NN") sort(ready_list.begin(),ready_list.end(),nearest_sort);
         }
         
+        /*
         else if (enum_option == "NN") {
 
             for (int i = 0; i < (int)ready_list.size(); i++) {
@@ -324,15 +326,13 @@ void solver::enumerate(int i) {
             }
             sort(ready_list.begin(),ready_list.end(),nearest_sort);
         }
-    }
+        */
 
     while(!ready_list.empty()) {
         //Take the choosen node;
         //start_time = chrono::high_resolution_clock::now();
        //Back track if ready list is empty;
-        if (enum_option == "DH") bound = ready_list.back().lb;
-        else bound = -1;
-
+        bound = ready_list.back().lb;
         taken_node = ready_list.back().n;
         ready_list.pop_back();
         if (!cur_solution.empty()) {
@@ -440,7 +440,7 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     cout << endl;
     */
 
-    cout << "Total enumerated nodes are " << enumerated_nodes << endl;
+    //cout << "Total enumerated nodes are " << enumerated_nodes << endl;
     //cout << "Total calculated bounds are " << calculated_bounds << endl;
 }
 
@@ -751,7 +751,6 @@ int solver::mmcp_lb() {
 
 
 vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
-
     vector<vector<int>> matrix(node_count);
     for(int i = 0; i < node_count; ++i){
 		matrix[i] = vector<int>(node_count, max_edge_weight*2);
@@ -768,15 +767,5 @@ vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
         }
     }
 
-    /*
-    for (int i = 0; i < node_count; i++) {
-		std::cout << "matrix at row" << i << "is ";
-		for (auto weight : matrix[i]) {
-			std::cout << weight << ",";
-		}
-		std::cout << std::endl;
-	}
-    */
-    
     return matrix;
 }
