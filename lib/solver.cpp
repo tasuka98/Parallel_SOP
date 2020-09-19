@@ -26,6 +26,8 @@ long eclipsed_time = 0;
 
 HistoryNode visted;
 bool full_solution = false;
+float total_time_static = 0;
+float ready_list_time = 0;
 int lb = 0;
 int suffix_cost = 0;
 int previous_snode = 0;
@@ -53,39 +55,6 @@ int solver::dynamic_hungarian(int src, int dest) {
     return hungarian_solver.get_matching_cost()/2;
 }
 
-int solver::History_LB() {
-    string bit_string(node_count, '0');
-
-    for (auto node : cur_solution) {
-        bit_string[node] = '1';
-    }   
-
-    int last_element = cur_solution.back();
-    auto key = make_pair(bit_string,last_element);
-
-    if (!history_table.find(key)) return -1;
-    
-    HistoryNode history_node = history_table.retrieve(key);
-
-    int history_prefix = history_node.prefix_cost;
-    int history_lb = history_node.lower_bound;
-
-    if (cur_cost >= history_prefix) return history_lb;
-
-    int imp = history_prefix - cur_cost;
-    
-    if (imp <= history_lb - best_cost) return history_lb;
-    history_node.prefix_sched = cur_solution;
-    history_node.prefix_cost = cur_cost;
-    history_node.lower_bound = history_lb - imp;
-    
-    if (!history_node.suffix_sched.empty()) {
-        return cur_cost + history_node.suffix_cost;
-    }
-
-    return history_node.lower_bound;
-}
-
 bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
     string bit_string(node_count, '0');
 
@@ -96,9 +65,8 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
     int last_element = cur_solution.back();
     auto key = make_pair(bit_string,last_element);
 
-    if (!history_table.find(key)) return true;
-
     HistoryNode history_node = history_table.retrieve(key);
+    if (history_node.prefix_sched.empty()) return true;
 
     *found = true;
     int history_prefix = history_node.prefix_cost;
@@ -228,21 +196,17 @@ bool nearest_sort(const node& src,const node& dest) {
 }
 
 void solver::enumerate(int i) {
-    if (i == node_count) {
-        process_solution();
-        return;
+    
+    if (enum_option != "DH") {
+        bool keep_explore = true;
+        if (cur_solution.size() >= 2) {
+            int u = cur_solution.end()[-2];
+            int v = cur_solution.back();
+            keep_explore = LB_Check(u,v);
+        }
+        if (!keep_explore) return;
     }
     
-    /*
-    bool keep_explore = true;
-    if (cur_solution.size() >= 2) {
-        int u = cur_solution.end()[-2];
-        int v = cur_solution.back();
-        keep_explore = LB_Check(u,v);
-    }
-
-    if (!keep_explore) return;
-    */
     enumerated_nodes++;
 
     vector<node> ready_list;
@@ -256,89 +220,104 @@ void solver::enumerate(int i) {
     //update vertex dependent count for current node neighbors
 
     int taken_node = 0;
-    bool calculate = false;
     int u = 0;
     int v = 0;
+
+    int bound = INT_MAX;
+    if (!cur_solution.empty()) {
+        if (enum_option == "DH") {
+            for (int i = 0; i < (int)ready_list.size(); i++) {
+                node dest = ready_list[i];
+                int src = cur_solution.back();
+                cur_solution.push_back(dest.n);
+                cur_cost += cost_graph[src][dest.n].weight;
+                int temp_lb = -1;
+                bool taken = false;
+                
+                if (cur_cost >= best_cost) {
+                    cur_solution.pop_back();
+                    cur_cost -= cost_graph[src][dest.n].weight;
+                    ready_list.erase(ready_list.begin()+i);
+                    i--;
+                    continue;
+                }
+                if (cur_solution.size() == node_count) {
+                    if (cur_cost < best_cost) {
+                        best_solution = cur_solution;
+                        best_cost = cur_cost;
+                        cur_solution.pop_back();
+                        cur_cost -= cost_graph[src][dest.n].weight;
+                        ready_list.erase(ready_list.begin()+i);
+                        i--;
+                        continue;
+                    }
+                }
+                
+                else {
+                    bool decision = HistoryUtilization(&temp_lb,&taken,false);
+                    
+                    if (!taken) {
+                        string bit_string(node_count, '0');
+                        for (auto node : cur_solution) bit_string[node] = '1';
+                        int last_element = cur_solution.back();
+                        auto key = make_pair(bit_string,last_element);
+                        temp_lb = dynamic_hungarian(src,dest.n);
+                        history_table.insert(key,HistoryNode(cur_cost,temp_lb,cur_solution));
+                        hungarian_solver.undue_row(src,dest.n);
+                        hungarian_solver.undue_column(dest.n,src);
+                    }
+                    else if (taken && !decision) {
+                        cur_solution.pop_back();
+                        cur_cost -= cost_graph[src][dest.n].weight;
+                        ready_list.erase(ready_list.begin()+i);
+                        i--;
+                        continue;
+                    }
+                    
+                    if (temp_lb >= best_cost) {
+                        cur_solution.pop_back();
+                        cur_cost -= cost_graph[src][dest.n].weight;
+                        ready_list.erase(ready_list.begin()+i);
+                        i--;
+                        continue;
+                    }
+
+                    cur_solution.pop_back();
+                    cur_cost -= cost_graph[src][dest.n].weight;
+                    ready_list[i].nc = cost_graph[src][dest.n].weight;
+                    ready_list[i].lb = temp_lb;
+                }
+            }
+            sort(ready_list.begin(),ready_list.end(),bound_sort);
+        //for (auto k : ready_list) cout << k.lb << ",";
+        // cout << endl;
+        }
+        
+        else if (enum_option == "NN") {
+            for (int i = 0; i < (int)ready_list.size(); i++) {
+                int dest = ready_list[i].n;
+                int src = cur_solution.back();
+
+                if (cur_cost + cost_graph[src][dest].weight >= best_cost) {
+                    ready_list.erase(ready_list.begin()+i);
+                    i--;
+                    continue;
+                }
+                ready_list[i].nc = cost_graph[src][dest].weight;
+            }
+            if (!ready_list.empty()) sort(ready_list.begin(),ready_list.end(),nearest_sort);
+        }
+    }
 
     while(!ready_list.empty()) {
         //Take the choosen node;
         //start_time = chrono::high_resolution_clock::now();
-        int bound = INT_MAX;
-        
-        if (!cur_solution.empty()) {
-            if (enum_option == "DH") {
-                if (!calculate) {
-                    for (int i = 0; i < (int)ready_list.size(); i++) {
-                        node dest = ready_list[i];
-                        int src = cur_solution.back();
-                        cur_solution.push_back(dest.n);
-                        cur_cost += cost_graph[src][dest.n].weight;
-                        int temp_lb = -1;
-                        bool taken = false;
-                        if (cur_cost >= best_cost) {
-                            cur_solution.pop_back();
-                            cur_cost -= cost_graph[src][dest.n].weight;
-                            ready_list.erase(ready_list.begin()+i);
-                            i--;
-                            continue;
-                        }
-                        bool decision = HistoryUtilization(&temp_lb,&taken,false);
-                        if (!taken) {
-                            temp_lb = dynamic_hungarian(src,dest.n);
-                            hungarian_solver.undue_row(src,dest.n);
-                            hungarian_solver.undue_column(dest.n,src);
-                        }
-                        else if (taken && !decision) {
-                            cur_solution.pop_back();
-                            cur_cost -= cost_graph[src][dest.n].weight;
-                            ready_list.erase(ready_list.begin()+i);
-                            i--;
-                            continue;
-                        }
-                        
-                        if (temp_lb >= best_cost) {
-                            cur_solution.pop_back();
-                            cur_cost -= cost_graph[src][dest.n].weight;
-                            ready_list.erase(ready_list.begin()+i);
-                            i--;
-                            continue;
-                        }
-
-                        cur_solution.pop_back();
-                        cur_cost -= cost_graph[src][dest.n].weight;
-                        ready_list[i].nc = cost_graph[src][dest.n].weight;
-                        ready_list[i].lb = temp_lb;
-                    }
-                    sort(ready_list.begin(),ready_list.end(),bound_sort);
-                   //for (auto k : ready_list) cout << k.lb << ",";
-                   // cout << endl;
-                }
-            }
-            
-            else if (enum_option == "NN") {
-                if (!calculate) {
-                    for (int i = 0; i < (int)ready_list.size(); i++) {
-                        int dest = ready_list[i].n;
-                        int src = cur_solution.back();
-
-                        if (cur_cost + cost_graph[src][dest].weight >= best_cost) {
-                            ready_list.erase(ready_list.begin()+i);
-                            i--;
-                            continue;
-                        }
-                        ready_list[i].nc = cost_graph[src][dest].weight;
-                    }
-                    if (!ready_list.empty()) sort(ready_list.begin(),ready_list.end(),nearest_sort);
-                }
-            }
-        }
-
        //Back track if ready list is empty;
-        if (ready_list.empty()) return;
         bound = ready_list.back().lb;
         taken_node = ready_list.back().n;
         ready_list.pop_back();
         if (!cur_solution.empty()) {
+            
             u = cur_solution.back();
             v = taken_node;
             hungarian_solver.fix_row(u, v);
@@ -353,6 +332,7 @@ void solver::enumerate(int i) {
         suffix.clear();
         suffix_cost = 0;
         previous_snode = 0;
+        //cout << "hung solver before enum time: "  << setprecision(4) << total_time / (float)(1000000) << endl;
         ///////
         
         //cout << "current solution is";
@@ -362,11 +342,9 @@ void solver::enumerate(int i) {
         /////
 
         enumerate(i+1);
-        calculate = true;
+
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
         taken_arr[taken_node] = 0;
-        
-        
         
         assign_historytable(cur_cost,bound,i);
         if ((int)cur_solution.size() == node_count) {
@@ -384,6 +362,7 @@ void solver::enumerate(int i) {
             hungarian_solver.undue_row(u,v);
 		    hungarian_solver.undue_column(v,u);
         }
+       // cout << "assign to history table time: " << setprecision(4) << total_time / (float)(1000000) << endl;
     }
     return;
 }

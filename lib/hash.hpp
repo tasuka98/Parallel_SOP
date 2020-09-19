@@ -11,7 +11,6 @@ class Hash_Map {
         Hash_Map(int size);
         bool isEmpty();
         uint32_t hash_func(pair<string,int> item);
-        bool find(pair<string,int> item);
         void insert(pair<string,int>& item,HistoryNode node);
         HistoryNode retrieve(pair<string,int> item);
 };
@@ -40,9 +39,10 @@ uint32_t Hash_Map::hash_func(pair<string,int> item) {
 }
 */
 
+
 void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
     size_t val = hash<string>{}(item.first);
-    int key = val % size;
+    int key = (val + item.second) % size;
     bool exist = false;
     if (!History_table[key].size()) {
         History_table[key].push_back(make_pair(item,node));
@@ -69,7 +69,7 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
 
 HistoryNode Hash_Map::retrieve(pair<string,int> item) {
     size_t val = hash<string>{}(item.first);
-    int key = val % size;
+    int key = (val + item.second) % size;
 
     for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {
         string permutation_src = item.first;
@@ -82,21 +82,4 @@ HistoryNode Hash_Map::retrieve(pair<string,int> item) {
     }
     
     return HistoryNode();
-}
-
-bool Hash_Map::find(pair<string,int> item) {
-    size_t val = hash<string>{}(item.first);
-    int key = val % size;
-
-    for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {
-        string permutation_src = item.first;
-        string permutation_dest = iter->first.first;
-        int ending_src = item.second;
-        int ending_dest = iter->first.second;
-        if (permutation_src == permutation_dest && ending_src == ending_dest) {
-            return true;
-        }
-    }
-
-    return false;
 }
