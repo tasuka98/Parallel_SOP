@@ -4,6 +4,12 @@
         "vector": "cpp",
         "xstring": "cpp",
         "algorithm": "cpp",
-        "ostream": "cpp"
+        "ostream": "cpp",
+        "stack": "cpp",
+        "queue": "cpp",
+        "type_traits": "cpp",
+        "thread": "cpp",
+        "chrono": "cpp",
+        "mutex": "cpp"
     }
 }

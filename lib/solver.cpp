@@ -10,6 +10,9 @@
 #include <numeric>
 #include <functional>
 #include <vector>
+#include <thread>
+#include <queue>
+#include <mutex>
 #include <bits/stdc++.h>
 #include <unordered_map>
 #include<setjmp.h>
@@ -32,13 +35,13 @@ int lb = 0;
 int suffix_cost = 0;
 int previous_snode = 0;
 
+int best_cost = 0;
+vector<int> best_solution;
+
 jmp_buf buf;
-vector<int> raedy_list;
 vector<int> suffix;
 vector<bool> picked_list;
-
-int* depCnt;
-int* taken_arr;
+mutex GPQ_lock, Sol_lock, History_lock;
 
 void solver::process_solution() {
     if (cur_cost < best_cost) {
@@ -89,11 +92,15 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
         suffix_sched = history_node.suffix_sched;
         int suf_cost = history_node.suffix_cost;
         temp.insert(temp.end(),suffix_sched.begin(),suffix_sched.end());
+        Sol_lock.lock();
         best_solution = temp;
+        Sol_lock.unlock();
         best_cost = cur_cost + suf_cost;
         history_node.lower_bound = best_cost;
         *lowerbound = history_node.lower_bound;
+        History_lock.lock();
         history_table.insert(key,history_node);
+        History_lock.unlock();
         return false;
     }
     else {
@@ -103,55 +110,16 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
             }
             history_node.suffix_cost = suffix_cost;
             history_node.lower_bound = cur_cost + suffix_cost;
+            History_lock.lock();
             history_table.insert(key,history_node);
+            History_lock.unlock();
             return false;
         }
     }
 
+    History_lock.lock();
     history_table.insert(key,history_node);
-    return true;
-}
-
-bool solver::LB_Check(int src, int dest) {
-    if (cur_cost > best_cost) return false;
-    //Dyanmic hungarian lower bound
-    int LB = 0;
-    bool found = false;
-    bool decision = HistoryUtilization(&LB,&found,false);
-
-    if (found) {
-        if (!decision) return false;
-        if (LB >= best_cost) return false;
-    }
-    else {
-        hungarian_solver.solve_dynamic();
-        LB = hungarian_solver.get_matching_cost()/2;
-        if (LB >= best_cost) return false;
-        string bit_string(node_count, '0');
-        for (auto node : cur_solution) bit_string[node] = '1';
-        int last_element = cur_solution.back();
-        auto key = make_pair(bit_string,last_element);
-        history_table.insert(key,HistoryNode(cur_cost,LB,cur_solution));
-    }
-
-    /*
-
-    int lower_bound1 = dynamic_edb();
-
-    if (lower_bound1 + cur_cost >= best_cost) {
-    
-
-        std::cout << "the current solution is";
-        for (int i : cur_solution) {
-            std::cout << i << ",";
-        }
-        std::cout << std::endl;
-        std::cout << "the lower bound is " << lower_bound1 << std::endl;
-        calculated_bounds++;
-        return false;
-    }
-    */
-
+    History_lock.unlock();
     return true;
 }
 
@@ -176,14 +144,18 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
         auto key = make_pair(bit_string,last_element);
     
         if (suffix.empty()) {
+            History_lock.lock();
             history_table.insert(key,HistoryNode(prefix_cost,lower_bound,cur_solution));
+            History_lock.unlock();
         }
 
         else {
             std::vector<int> suffix_sched;
             int size = suffix_sched.size();
             for (int i = size - 1; i >= 0; i--) suffix_sched.push_back(suffix[i]);
+            History_lock.lock();
             history_table.insert(key,HistoryNode(prefix_cost,suffix_cost,prefix_cost+suffix_cost,cur_solution,suffix_sched));
+            History_lock.unlock();
         }
     }
     
@@ -199,7 +171,9 @@ bool nearest_sort(const node& src,const node& dest) {
     return src.nc > dest.nc;
 }
 
+
 void solver::enumerate(int i) {
+    
     
     /*
     if (enum_option != "DH") {
@@ -212,9 +186,7 @@ void solver::enumerate(int i) {
         if (!keep_explore) return;
     }
     */
-    
     enumerated_nodes++;
-
     vector<node> ready_list;
 
     for (int i = node_count-1; i >= 0; i--) {
@@ -248,8 +220,11 @@ void solver::enumerate(int i) {
                 }
                 if (cur_solution.size() == node_count) {
                     if (cur_cost < best_cost) {
+                        //Lock the best solution found so far.
+                        Sol_lock.lock();
                         best_solution = cur_solution;
                         best_cost = cur_cost;
+                        Sol_lock.unlock();
                         cur_solution.pop_back();
                         cur_cost -= cost_graph[src][dest.n].weight;
                         ready_list.erase(ready_list.begin()+i);
@@ -257,7 +232,7 @@ void solver::enumerate(int i) {
                         continue;
                     }
                 }
-                
+
                 else {
                     bool decision = HistoryUtilization(&temp_lb,&taken,false);
                     if (!taken) {
@@ -266,7 +241,9 @@ void solver::enumerate(int i) {
                         int last_element = cur_solution.back();
                         auto key = make_pair(bit_string,last_element);
                         temp_lb = dynamic_hungarian(src,dest.n);
+                        History_lock.lock();
                         history_table.insert(key,HistoryNode(cur_cost,temp_lb,cur_solution));
+                        History_lock.unlock();
                         hungarian_solver.undue_row(src,dest.n);
                         hungarian_solver.undue_column(dest.n,src);
                     }
@@ -293,40 +270,6 @@ void solver::enumerate(int i) {
             if (enum_option == "DH") sort(ready_list.begin(),ready_list.end(),bound_sort);
             else if (enum_option == "NN") sort(ready_list.begin(),ready_list.end(),nearest_sort);
         }
-        
-        /*
-        else if (enum_option == "NN") {
-
-            for (int i = 0; i < (int)ready_list.size(); i++) {
-                int dest = ready_list[i].n;
-                int src = cur_solution.back();
-                cur_cost += cost_graph[src][dest].weight;
-                cur_solution.push_back(dest);
-
-                if (cur_cost >= best_cost) {
-                    cur_cost -= cost_graph[src][dest].weight;
-                    cur_solution.pop_back();
-                    ready_list.erase(ready_list.begin()+i);
-                    i--;
-                    continue;
-                }
-
-                else if (cur_solution.size() == node_count && cur_cost < best_cost) {
-                    best_solution = cur_solution;
-                    best_cost = cur_cost;
-                    cur_solution.pop_back();
-                    cur_cost -= cost_graph[src][dest].weight;
-                    ready_list.erase(ready_list.begin()+i);
-                    i--;
-                    continue;
-                }
-                cur_cost -= cost_graph[src][dest].weight;
-                cur_solution.pop_back();
-                ready_list[i].nc = cost_graph[src][dest].weight;
-            }
-            sort(ready_list.begin(),ready_list.end(),nearest_sort);
-        }
-        */
 
     while(!ready_list.empty()) {
         //Take the choosen node;
@@ -350,15 +293,13 @@ void solver::enumerate(int i) {
         suffix.clear();
         suffix_cost = 0;
         previous_snode = 0;
-        //cout << "hung solver before enum time: "  << setprecision(4) << total_time / (float)(1000000) << endl;
-        ///////
-        
+
+        //////
         //cout << "current solution is";
         //for (auto node : cur_solution) cout << node << ",";
         //cout <<  endl;
+        //////
         
-        /////
-
         enumerate(i+1);
 
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
@@ -391,7 +332,123 @@ void solver::enumerate(int i) {
 }
 
 
-void solver::solve(string filename,string enum_opt,long time_limit) {
+void solver::solve_parallel(int thread_num, int pool_size) {
+    queue<solver> GPQ;
+    vector<solver> Temp;
+    vector<solver> solvers(thread_num);
+    vector<thread> Thread_manager(thread_num);
+    vector<int> ready_thread;
+    //Initially fill the GPQ with solvers:
+    vector<node> ready_list;
+    cur_solution.push_back(0);
+    taken_arr[0] = 1;
+    for (int vertex : dependent_graph[0]) depCnt[vertex]--;
+
+    for (int i = node_count-1; i >= 0; i--) {
+        if (!depCnt[i] && !taken_arr[i]) {
+            //Push vertices with 0 depCnt into the ready list
+            ready_list.push_back(node(i,-1));
+        }
+    }
+    
+
+    //Initial filling of the GPQ
+    for (auto node : ready_list) {
+        auto target = *this;
+        int taken_node = node.n;
+        int cur_node = target.cur_solution.back();
+        target.taken_arr[taken_node] = 1;
+        for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]--;
+        target.cur_cost += cost_graph[cur_node][taken_node].weight;
+        target.cur_solution.push_back(taken_node);
+        target.hungarian_solver.fix_row(cur_node, taken_node);
+        target.hungarian_solver.fix_column(taken_node, cur_node);
+        target.hungarian_solver.solve_dynamic();
+        if (GPQ.size() < pool_size) {
+            GPQ.push(target);
+        }
+        else {
+            Temp.push_back(target);
+        }
+    }
+
+    for (int i = thread_num - 1; i >= 0; i--) ready_thread.push_back(i);
+
+    //While GPQ is not empty do split operation or assign threads with new node.
+    while (!GPQ.empty()) {
+        GPQ_lock.lock();
+
+        if (GPQ.size() <= thread_num) {
+
+            auto target = GPQ.front();
+            GPQ.pop();
+            ready_list.clear();
+            for (int i = node_count-1; i >= 0; i--) {
+            if (!target.depCnt[i] && !target.taken_arr[i]) ready_list.push_back(node(i,-1));
+            }
+            for (auto node : ready_list) {
+                int vertex = node.n;
+                //Push split node back into GPQ
+                if (!target.depCnt[vertex] && !target.taken_arr[vertex]) {
+                    int taken_node = vertex;
+                    int cur_node = target.cur_solution.back();
+                    target.taken_arr[taken_node] = 1;
+                    for (int vertex : target.dependent_graph[taken_node]) target.depCnt[vertex]--;
+                    target.cur_cost += cost_graph[cur_node][taken_node].weight;
+                    target.cur_solution.push_back(taken_node);
+                    target.hungarian_solver.fix_row(cur_node, taken_node);
+                    target.hungarian_solver.fix_column(taken_node, cur_node);
+                    target.hungarian_solver.solve_dynamic();
+                    
+                    GPQ.push(target);
+
+                    target.taken_arr[taken_node] = 0;
+                    for (int vertex : target.dependent_graph[taken_node]) target.depCnt[vertex]++;
+                    target.cur_cost -= cost_graph[cur_node][taken_node].weight;
+                    target.cur_solution.pop_back();
+                    target.hungarian_solver.undue_row(cur_node, taken_node);
+                    target.hungarian_solver.undue_column(taken_node, cur_node);
+                }
+            }
+            if (GPQ.empty()) {
+                GPQ.push(target);
+            }
+        }
+        
+        for (int i = 0; i < thread_num; i++) {
+            if (!GPQ.empty()) {
+                auto subproblem = GPQ.front();
+                GPQ.pop();
+                int k = subproblem.cur_solution.size() - 1;
+                solvers[i] = subproblem;
+                Thread_manager[i] = thread(&solver::enumerate,move(solvers[i]),k);
+            }
+        }
+
+        if (GPQ.empty()) {
+            while (!Temp.empty()) {
+                if (GPQ.size() < pool_size) {
+                    GPQ.push(Temp.back());
+                    Temp.pop_back();
+                }
+                else break;
+            }
+        }
+        
+        for (int i = 0; i < thread_num; i++) {
+            if (Thread_manager[i].joinable()) {
+                Thread_manager[i].join();
+                ready_thread.push_back(i);
+            }
+        }
+        GPQ_lock.unlock();
+    }
+    
+    
+    return;
+}
+
+void solver::solve(string filename,string enum_opt,long time_limit,int pool_size,int thread_num) {
     retrieve_input(filename);
     enum_option = enum_opt;
     t_limit = time_limit * 1000000;
@@ -401,10 +458,8 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     MMCP_static_lowerbound = hungarian_solver.start()/2;
     picked_list = vector<bool>(node_count,false);
     EGB_static_lowerbound = mmcp_lb();
-    depCnt = new int[node_count];
-    taken_arr = new int[node_count];
-    memset(depCnt,0,node_count * sizeof(int));
-    memset(taken_arr,0,node_count * sizeof(int));
+    depCnt = vector<int>(node_count,0);
+    taken_arr = vector<int>(node_count,0);
 
     for (int i = 0; i < node_count; i++) {
         for (unsigned k = 0; k < dependent_graph[i].size(); k++) {
@@ -425,10 +480,10 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     cur_cost = 0;
 
     auto start_time = chrono::high_resolution_clock::now();
-    enumerate(0);
+    //enumerate(0);
+    solve_parallel(thread_num,pool_size);
     auto end_time = chrono::high_resolution_clock::now();
-    auto total_time = chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count();
-
+    auto total_time = chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
     cout << enum_opt << ": " << best_cost << "," << setprecision(4) << total_time / (float)(1000000) << endl;
 
     /*

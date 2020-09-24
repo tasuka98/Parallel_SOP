@@ -27,13 +27,13 @@ class node {
 class solver {
     private:
         string enum_option;
+        vector<int> depCnt;
+        vector<int> taken_arr;
         int node_count;
         int EGB_static_lowerbound;
         int MMCP_static_lowerbound;
         int cur_cost;
-        int best_cost;
         long t_limit;
-        vector<int> best_solution;
         vector<int> cur_solution;
         vector<vector<int>> dependent_graph;
         vector<vector<edge>> in_degree;
@@ -43,7 +43,6 @@ class solver {
     public:
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
         vector<int> nearest_neightbor();
-        bool LB_Check(int src, int dest);
         bool HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist);
         int get_maxedgeweight();
         int dynamic_edb();
@@ -53,7 +52,8 @@ class solver {
         void process_solution();
         void assign_historytable(int prefix_cost,int lower_bound,int i);
         void enumerate(int i);
-        void solve(string filename,string enum_opt,long time_limit);
+        void solve(string filename,string enum_opt,long time_limit,int pool_size, int thread_num);
+        void solve_parallel(int thread_num, int pool_size);
         void retrieve_input(string filename);
         void transitive_redundantcy();
         void sort_weight(vector<vector<edge>>& graph);

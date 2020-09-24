@@ -1,6 +1,6 @@
 CC = g++
-LINK = -o
-CXX_VERSION = -std=c++11
+LINK = -pthread -o
+CXX_VERSION = -std=c++14 -pthread
 OPTIMIZATION = -O3 -c
 OPTIMIZATION_LINK = -O3
 CXXFLAG = -Wall $(CXX_VERSION)
