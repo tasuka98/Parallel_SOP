@@ -2,4 +2,4 @@
 
 ## Usage
 - `make`
-- `./sop_solver <instant name> <heuristic> <time limit>`
+- `./sop_solver <Instant Name> <Static Enumeration> <Time Limit> <Pool size> <Thread Size>`

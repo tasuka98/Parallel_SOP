@@ -1,7 +1,9 @@
 #include <vector>
 #include <unordered_map>
 #include <list>
+#include <mutex>
 #include "history.hpp"
+static vector<mutex> hash_lock;
 
 class Hash_Map {
     private:
@@ -19,6 +21,7 @@ class Hash_Map {
 
 Hash_Map::Hash_Map(int size) {
     this->size = size;
+    hash_lock = vector<mutex>(size);
     History_table.resize(size);
 }
 
@@ -43,9 +46,12 @@ uint32_t Hash_Map::hash_func(pair<string,int> item) {
 void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
     size_t val = hash<string>{}(item.first);
     int key = (val + item.second) % size;
+
+    hash_lock[key].lock();
     bool exist = false;
     if (!History_table[key].size()) {
         History_table[key].push_back(make_pair(item,node));
+        hash_lock[key].unlock();
         return;
     }
     for (auto iter = History_table[key].begin(); iter != History_table[key].end(); iter++) {
@@ -56,14 +62,18 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
         if (permutation_src == permutation_dest && ending_src == ending_dest) {
             exist = true;
             iter->second = node;
+            hash_lock[key].unlock();
             return;
         }
     }
 
     if (!exist) {
         History_table[key].push_back(make_pair(item,node));
+        hash_lock[key].unlock();
         return;
     }
+    
+    hash_lock[key].unlock();
     return;
 }
 

@@ -33,6 +33,7 @@ class solver {
         int EGB_static_lowerbound;
         int MMCP_static_lowerbound;
         int cur_cost;
+        int initial_depth;
         long t_limit;
         vector<int> cur_solution;
         vector<vector<int>> dependent_graph;
