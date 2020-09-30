@@ -1,0 +1,17 @@
+//DH for lower bound and NN for nearest neighbor
+Static_Enumeration = DH
+
+//Time limit for the input instance (in seconds)
+Time_Limit = 200
+
+//Size of the initial workload pool
+Pool_Size = 4
+
+//Thread size
+Thread_Size = 4
+
+//Split level
+Level = 100
+
+//Split decision (FULL for pushing extra nodes to the GPQ less or equal to the size of the GPQ, SINGLE for only 1 push)
+Decision = FULL

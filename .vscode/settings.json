@@ -10,6 +10,7 @@
         "type_traits": "cpp",
         "thread": "cpp",
         "chrono": "cpp",
-        "mutex": "cpp"
+        "mutex": "cpp",
+        "xmemory": "cpp"
     }
 }
