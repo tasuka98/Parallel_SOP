@@ -1,8 +1,8 @@
 CC = g++
-LINK = -pthread -o
+LINK = -o
 CXX_VERSION = -std=c++14 -pthread
-OPTIMIZATION = -g -c
-OPTIMIZATION_LINK = -g
+OPTIMIZATION = -O3 -c
+OPTIMIZATION_LINK = -O3
 CXXFLAG = -Wall $(CXX_VERSION)
 SRC = ./src
 LIB = ./lib

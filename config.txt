@@ -8,10 +8,10 @@ Time_Limit = 200
 Pool_Size = 4
 
 //Thread size
-Thread_Size = 4
+Thread_Size = 1
 
 //Split level
-Level = 5
+Level = 100
 
 //Split decision (FULL for pushing extra nodes to the GPQ less or equal to the size of the GPQ, SINGLE for only 1 push)
 Decision = FULL
