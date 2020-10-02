@@ -2,4 +2,6 @@
 
 ## Usage
 - `make`
-- `./sop_solver <Instant Name> <Static Enumeration> <Time Limit> <Pool size> <Thread Size>`
+- `./sop_solver <Instant Name>`
+
+The rest of the setting can be change in config.txt
