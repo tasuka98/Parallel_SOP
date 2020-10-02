@@ -29,7 +29,7 @@ static queue<solver> GPQ;
 //vector<bool> picked_list;
 
 //Variable for locking;
-static mutex GPQ_lock, Sol_lock, Split_lock;
+static mutex GPQ_lock, Sol_lock, Split_lock, Boardcast_lock;
 static mutex Split_Call, asssign_mutex, unlock_mutex;
 static condition_variable Idel,thread_counter;
 
@@ -45,6 +45,7 @@ static int t_limit = 0;
 static int thread_total = 0;
 static int split_depth = 0;
 static string Split_Opt;
+static string Steal_Opt;
 
 void solver::process_solution() {
     if (cur_cost < best_cost) {
@@ -120,14 +121,6 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
     return true;
 }
 
-/*
-int solver::dynamic_edb() {
-    int picked_node = cur_solution.back();
-    picked_list[picked_node] = true;
-    recently_added = picked_node;
-    return mmcp_lb();
-}
-*/
 void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
     bool taken = false;
     int lb = 0;
@@ -167,17 +160,6 @@ bool nearest_sort(const node& src,const node& dest) {
 
 
 void solver::enumerate(int i) {
-    /*
-    if (enum_option != "DH") {
-        bool keep_explore = true;
-        if (cur_solution.size() >= 2) {
-            int u = cur_solution.end()[-2];
-            int v = cur_solution.back();
-            keep_explore = LB_Check(u,v);
-        }
-        if (!keep_explore) return;
-    }
-    */
     vector<node> ready_list;
 
     for (int i = node_count-1; i >= 0; i--) {
@@ -325,59 +307,41 @@ void solver::enumerate(int i) {
                 //cout << "finish taking from GPQ with thread id = " << std::this_thread::get_id() << endl;
             }
         }
-        ///////
-        /*
-        Split = false;
-        std::unique_lock<std::mutex> idel_lck(Split_lock);
-        Idel.notify_all();
-        idel_lck.unlock();
-        //cout << "notified!\n";
-        asssign_mutex.unlock();
-        //////
-        //If spliting is done we notify all current waiting thread and the Idel thread.
-        */
 
         steal_counter++;
-        if (!Split || steal_counter >= active_thread) {
-            Split = false;
-            std::unique_lock<std::mutex> idel_lck(Split_lock);
-            Idel.notify_all();
-            idel_lck.unlock();
-            //cout << "notified!\n";
-        }
-        asssign_mutex.unlock();
-        /*
-        if (!Split || steal_counter >= active_thread) {
-            cout << "unbloack with thread id = " << std::this_thread::get_id() << endl; 
-            if (Split) Split = false;
-            steal_counter = 1;
-            std::unique_lock<std::mutex> unlock(unlock_mutex);
-            std::unique_lock<std::mutex> idel_lck(Split_lock);
-            thread_counter.notify_all();
-            unlock.unlock();
-            Idel.notify_all();
-            idel_lck.unlock();
-        }
-        else {
-            cout << "Hang with thread id = " << std::this_thread::get_id() << "and active thread == " << active_thread << endl; 
-            asssign_mutex.unlock();
-            while (Split) {
-                std::unique_lock<std::mutex> unlock(unlock_mutex);
-                thread_counter.wait(unlock);
-                unlock.unlock();
-                Split = false;
-                cout << "unblocked but not yet checked condition! with thread id = " << std::this_thread::get_id() << endl;
-            }
-            //cout << "unblocked!\n";
 
-            if (!Split) {
+        if (Steal_Opt == "ASYNC") {
+            if (!Split || steal_counter >= active_thread - 1) {
+                Split = false;
                 std::unique_lock<std::mutex> idel_lck(Split_lock);
                 Idel.notify_all();
                 idel_lck.unlock();
+                //cout << "notified!\n";
             }
         }
+
+        else if (Steal_Opt == "SYNC") {
+            if (!Split || steal_counter >= active_thread - 1) {
+                Split = false;
+                std::unique_lock<std::mutex> unlock(unlock_mutex);
+                std::unique_lock<std::mutex> idel_lck(Split_lock);
+                thread_counter.notify_all();
+                unlock.unlock();
+                Idel.notify_all();
+                idel_lck.unlock();
+            }
+            else {
+                while (Split && steal_counter < active_thread - 1) {
+                    asssign_mutex.unlock();
+                    std::unique_lock<std::mutex> unlock(unlock_mutex);
+                    thread_counter.wait(unlock);
+                } 
+                //cout << "unblocked!\n";
+            }
+            
+        }
         asssign_mutex.unlock();
-        */
+        
     }
 
     while(!ready_list.empty()) {
@@ -402,12 +366,6 @@ void solver::enumerate(int i) {
         suffix.clear();
         suffix_cost = 0;
         previous_snode = 0;
-
-        //////
-        //cout << "current solution is";
-        //for (auto node : cur_solution) cout << node << ",";
-        //cout <<  endl;
-        //////
         
         enumerate(i+1);
 
@@ -443,13 +401,11 @@ void solver::enumerate(int i) {
     if (i == initial_depth && active_thread > 1) {
         active_thread--;
 
-        /*
-        {
-        std::unique_lock<std::mutex> lock(unlock_mutex);
-        thread_counter.notify_all();
-        lock.unlock();
+        if (Steal_Opt == "SYNC") {
+            std::unique_lock<std::mutex> lock(unlock_mutex);
+            thread_counter.notify_all();
+            lock.unlock();
         }
-        */
     
         if (active_thread == 1) {
             Split = false;
@@ -459,14 +415,11 @@ void solver::enumerate(int i) {
         }
 
         Split_Call.lock();
-        //cout << "active thread num is = " << active_thread << endl;
-        //cout << "started with thread id = " << std::this_thread::get_id() <<endl;
         GPQ_lock.lock();
         size = GPQ.size();
         if (size != 0) {
             *this = GPQ.front();
             GPQ.pop();
-            //cout << "finish taking from GPQ with thread id = " << std::this_thread::get_id() << endl;
         }
         GPQ_lock.unlock();
 
@@ -474,7 +427,6 @@ void solver::enumerate(int i) {
             Split = true;
             steal_counter = 1;
             while (Split) {
-                //cout << "waiting for take with thread id = " << std::this_thread::get_id() << endl;
                 std::unique_lock<std::mutex> idel_lck(Split_lock);
                 Idel.wait(idel_lck);
             }
@@ -484,11 +436,9 @@ void solver::enumerate(int i) {
             if (size != 0) {
                 *this = GPQ.front();
                 GPQ.pop();
-                //cout << "finish taking from splitting and exiting with thread id = " << std::this_thread::get_id() << endl;
             }
             GPQ_lock.unlock();
         }
-        //cout << "exiting with thread id = " << std::this_thread::get_id() << endl;
         Split_Call.unlock();
     }
 
@@ -628,13 +578,14 @@ void solver::solve_parallel(int thread_num, int pool_size) {
     return;
 }
 
-void solver::solve(string filename,string enum_opt,long time_limit,int pool_size,int thread_num,int split_num,string split_option) {
+void solver::solve(string filename,string enum_opt,long time_limit,int pool_size,int thread_num,int split_num,string split_option,string steal_option) {
     retrieve_input(filename);
     split_depth = split_num;
     enum_option = enum_opt;
     thread_total = thread_num;
     p_size = pool_size;
     Split_Opt = split_option;
+    Steal_Opt = steal_option;
     t_limit = time_limit * 1000000;
     best_solution = nearest_neightbor();
     int max_edge_weight = get_maxedgeweight();
@@ -880,109 +831,6 @@ void solver::print_dep() {
         cout << endl;
     }
 }
-
-/*
-int solver::mmcp_lb() {
-    int outsum = 0;
-    int insum = 0;
-    int out_array[node_count];
-    int in_array[node_count];
-    int depCnt_arr[node_count];
-    bool trim_in = true;
-    bool trim_out = true;
-    
-    memset(depCnt_arr,0,node_count*sizeof(int));
-    for (int i = 0; i < node_count; i++) {
-        for (long unsigned int k = 0; k < dependent_graph[i].size(); k++) {
-            depCnt_arr[dependent_graph[i][k]]++;
-        }
-    }
-
-    int out_max = 0;
-    int in_max = 0;
-
-    out_array[0] = 0;
-    out_array[node_count-1] = 0;
-    in_array[0] = 0;
-    in_array[node_count-1] = 0;
-
-
-    for (int i = 1; i < node_count - 1; i++) {
-        int min_out = INT_MAX;
-        int min_in = INT_MAX;
-        bool calculate_in = true;
-        bool calculate_out = true;
-
-
-        if (picked_list[i]) {
-            calculate_in = false;
-            trim_in = false;
-            if (recently_added != i) {
-                calculate_out = false;
-                trim_out = false;
-            }
-        }
-
-
-        for (int k = 1; k < node_count - 1; k++) {
-            int weight = cost_graph[i][k].weight;
-            if (calculate_out) {
-                if (find(in_degree[i].begin(),in_degree[i].end(),edge(k,i,-1)) == in_degree[i].end()) {
-                    if (k != i && weight < min_out && !picked_list[k]) min_out = weight;
-                }
-            }
-            
-            if (calculate_in) {
-                if (find(in_degree[k].begin(),in_degree[k].end(),edge(i,k,-1)) == in_degree[k].end()) {
-                    if (recently_added == k && k != i && weight < min_in) {
-                        min_in = weight;
-                    }
-                    else if (!picked_list[k] && k != i && weight < min_in) {
-                        min_in = weight;
-                    }
-                }
-            }
-            
-        }
-
-        if (min_out == INT_MAX) {
-            trim_out = false;
-            min_out = 0;
-        }
-
-        if (min_in == INT_MAX) {
-            trim_in = false;
-            min_out = 0;
-        }
-
-        
-        if (calculate_in) in_array[i] = min_in;
-        else in_array[i] = 0;
-
-        if (calculate_out) out_array[i] = min_out;
-        else out_array[i] = 0;
-        
-    }
-
-    for (int i = 1; i < node_count - 1; i++) {
-        if (dependent_graph[i].size() == 1 && dependent_graph[i][0] == node_count-1 && out_array[i] > out_max) {
-            out_max = out_array[i];
-        }
-        if (depCnt_arr[i] == 1 && in_degree[i][0].src == 0 && in_array[i] > in_max) {
-            in_max = in_array[i];
-        }
-        outsum += out_array[i];
-        insum += in_array[i];
-    }
-
-    if (trim_in == false && trim_out == false) return max(outsum,insum);
-    else if (trim_in == false) return max(outsum-out_max,insum);
-    else if (trim_out == false) return max(outsum,insum-in_max);
-    
-    return max(outsum-out_max,insum-in_max);
-}
-*/
-
 
 vector<vector<int>> solver::get_cost_matrix(int max_edge_weight) {
     vector<vector<int>> matrix(node_count);

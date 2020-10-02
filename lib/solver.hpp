@@ -56,7 +56,7 @@ class solver {
         void process_solution();
         void assign_historytable(int prefix_cost,int lower_bound,int i);
         void enumerate(int i);
-        void solve(string filename,string enum_opt,long time_limit,int pool_size,int thread_num,int split_num,string split_option);
+        void solve(string filename,string enum_opt,long time_limit,int pool_size,int thread_num,int split_num,string split_option,string steal_option);
         void solve_parallel(int thread_num, int pool_size);
         void retrieve_input(string filename);
         void transitive_redundantcy();
