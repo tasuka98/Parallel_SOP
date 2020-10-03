@@ -5,16 +5,16 @@ Static_Enumeration = DH
 Time_Limit = 200
 
 //Size of the initial workload pool
-Pool_Size = 4
+Pool_Size = 8
 
 //Thread size
-Thread_Size = 4
+Thread_Size = 8
 
 //Split level
 Level = 5
 
 //Split decision (FULL for pushing extra nodes to the GPQ less or equal to the size of the GPQ, SINGLE for only 1 push)
-Decision = FULL
+Decision = SINGLE
 
 //Thread stealing option (ASYNC for asynchronous stealing and SYNC for synchronous stealing)
 Decision = SYNC

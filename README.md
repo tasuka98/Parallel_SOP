@@ -4,4 +4,4 @@
 - `make`
 - `./sop_solver <Instant Name>`
 
-The rest of the setting can be change in config.txt
+The rest of the setting can be changed in config.txt

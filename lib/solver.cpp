@@ -29,15 +29,13 @@ static queue<solver> GPQ;
 //vector<bool> picked_list;
 
 //Variable for locking;
-static mutex GPQ_lock, Sol_lock, Split_lock, Boardcast_lock;
+static mutex GPQ_lock, Sol_lock, Split_lock;
 static mutex Split_Call, asssign_mutex, unlock_mutex;
-static condition_variable Idel,thread_counter;
-
+static condition_variable Idel;
 
 //Protected by lock
-atomic<bool> Split (false);
-atomic<int> active_thread (1);
-atomic<int> steal_counter (1);
+atomic<int> active_thread (0);
+atomic<int> idle_counter (0);
 
 //Config variable (Reading Only)
 static int p_size = 0;
@@ -243,43 +241,15 @@ void solver::enumerate(int i) {
     }
 
     //cout << "running with thread id = "<< std::this_thread::get_id() << endl;
-    while (Split && i <= split_depth) {
+    if (i <= split_depth && idle_counter > 0) {
         asssign_mutex.lock();
-        if (!Split) {
-            asssign_mutex.unlock();
-            break;
-        }
-        // Make sure we have at least two children in the ready list before splitting.
-        if (ready_list.size() >= 2) {
-            //Limit spliting to be 5 levels down the tree.
-            if (Split_Opt == "SINGLE") {
-                int taken_node = ready_list.back().n;
-                int cur_node = cur_solution.back();
-                taken_arr[taken_node] = 1;
-                for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
-                cur_cost += cost_graph[cur_node][taken_node].weight;
-                cur_solution.push_back(taken_node);
-                hungarian_solver.fix_row(cur_node, taken_node);
-                hungarian_solver.fix_column(taken_node, cur_node);
-                hungarian_solver.solve_dynamic();
-                ready_list.pop_back();
-
-                GPQ_lock.lock();
-                GPQ.push(*this);
-                GPQ_lock.unlock();
-
-                taken_arr[taken_node] = 0;
-                for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
-                cur_cost -= cost_graph[cur_node][taken_node].weight;
-                cur_solution.pop_back();
-                hungarian_solver.undue_row(cur_node, taken_node);
-                hungarian_solver.undue_column(taken_node, cur_node);
-                Split = false;
-                //cout << "finish taking from GPQ with thread id = " << std::this_thread::get_id() << endl;
-            }
-            else if (Split_Opt == "FULL") {
-                int p_count = 0;
-                while (ready_list.size() > 1 && p_count < p_size) {
+        //cout << "visiting with thread id = " << std::this_thread::get_id() << "and i = " << i <<  endl;
+        if (idle_counter <= 0) {
+            bool Split = false;
+            // Make sure we have at least two children in the ready list before splitting.
+            if (ready_list.size() >= 2) {
+                //Limit spliting to be 5 levels down the tree.
+                if (Split_Opt == "SINGLE") {
                     int taken_node = ready_list.back().n;
                     int cur_node = cur_solution.back();
                     taken_arr[taken_node] = 1;
@@ -301,47 +271,62 @@ void solver::enumerate(int i) {
                     cur_solution.pop_back();
                     hungarian_solver.undue_row(cur_node, taken_node);
                     hungarian_solver.undue_column(taken_node, cur_node);
-                    p_count++;
+                    Split = true;
+                    //cout << "finish taking from GPQ with thread id = " << std::this_thread::get_id() << endl;
                 }
-                Split = false;
-                //cout << "finish taking from GPQ with thread id = " << std::this_thread::get_id() << endl;
-            }
-        }
+                else if (Split_Opt == "FULL") {
+                    int p_count = 0;
+                    while (ready_list.size() > 1 && p_count < p_size) {
+                        int taken_node = ready_list.back().n;
+                        int cur_node = cur_solution.back();
+                        taken_arr[taken_node] = 1;
+                        for (int vertex : dependent_graph[taken_node]) depCnt[vertex]--;
+                        cur_cost += cost_graph[cur_node][taken_node].weight;
+                        cur_solution.push_back(taken_node);
+                        hungarian_solver.fix_row(cur_node, taken_node);
+                        hungarian_solver.fix_column(taken_node, cur_node);
+                        hungarian_solver.solve_dynamic();
+                        ready_list.pop_back();
 
-        steal_counter++;
+                        GPQ_lock.lock();
+                        GPQ.push(*this);
+                        GPQ_lock.unlock();
 
-        if (Steal_Opt == "ASYNC") {
-            if (!Split || steal_counter >= active_thread - 1) {
-                Split = false;
-                std::unique_lock<std::mutex> idel_lck(Split_lock);
-                Idel.notify_all();
-                idel_lck.unlock();
-                //cout << "notified!\n";
+                        taken_arr[taken_node] = 0;
+                        for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
+                        cur_cost -= cost_graph[cur_node][taken_node].weight;
+                        cur_solution.pop_back();
+                        hungarian_solver.undue_row(cur_node, taken_node);
+                        hungarian_solver.undue_column(taken_node, cur_node);
+                        p_count++;
+                    }
+                    Split = true;
+                    //cout << "finish taking from GPQ with thread id = " << std::this_thread::get_id() << endl;
+                }
             }
-        }
 
-        else if (Steal_Opt == "SYNC") {
-            if (!Split || steal_counter >= active_thread - 1) {
-                Split = false;
-                std::unique_lock<std::mutex> unlock(unlock_mutex);
-                std::unique_lock<std::mutex> idel_lck(Split_lock);
-                thread_counter.notify_all();
-                unlock.unlock();
-                Idel.notify_all();
-                idel_lck.unlock();
+            if (Split) {
+                if (Split_Opt == "SINGLE") {
+                    idle_counter--;
+                    if (idle_counter < 0) cout << "fuck\n";
+                    std::unique_lock<std::mutex> idel_lck(Split_lock);
+                    Idel.notify_one();
+                    idel_lck.unlock();
+                }
+                else if (Split_Opt == "FULL") {
+                    GPQ_lock.lock();
+                    for (int i = 0; i < GPQ.size(); i++) {
+                        idle_counter--;
+                        std::unique_lock<std::mutex> idel_lck(Split_lock);
+                        Idel.notify_one();
+                        idel_lck.unlock();
+                        if (idle_counter == 0) break;
+                    }
+                    GPQ_lock.unlock();
+                }
             }
-            else {
-                while (Split && steal_counter < active_thread - 1) {
-                    asssign_mutex.unlock();
-                    std::unique_lock<std::mutex> unlock(unlock_mutex);
-                    thread_counter.wait(unlock);
-                } 
-                //cout << "unblocked!\n";
-            }
-            
         }
         asssign_mutex.unlock();
-        
     }
 
     while(!ready_list.empty()) {
@@ -398,23 +383,14 @@ void solver::enumerate(int i) {
 
     int size = 0;
 
-    if (i == initial_depth && active_thread > 1) {
+    if (i == initial_depth && active_thread >= 1) {
         active_thread--;
-
-        if (Steal_Opt == "SYNC") {
-            std::unique_lock<std::mutex> lock(unlock_mutex);
-            thread_counter.notify_all();
-            lock.unlock();
-        }
-    
-        if (active_thread == 1) {
-            Split = false;
+        if (active_thread == 0) {
             std::unique_lock<std::mutex> idel_lck(Split_lock);
             Idel.notify_all();
             idel_lck.unlock();
         }
 
-        Split_Call.lock();
         GPQ_lock.lock();
         size = GPQ.size();
         if (size != 0) {
@@ -423,13 +399,21 @@ void solver::enumerate(int i) {
         }
         GPQ_lock.unlock();
 
-        if (size == 0 && active_thread > 1) {
-            Split = true;
-            steal_counter = 1;
-            while (Split) {
-                std::unique_lock<std::mutex> idel_lck(Split_lock);
+        if (size == 0 && active_thread > 0) {
+            idle_counter++;
+            GPQ_lock.lock();
+            size = GPQ.size();
+            GPQ_lock.unlock();
+
+            std::unique_lock<std::mutex> idel_lck(Split_lock);
+            while (size == 0 && active_thread > 0) {
+                //cout << "waiting with thread id = " << std::this_thread::get_id() << " with active num = " << active_thread << endl; 
                 Idel.wait(idel_lck);
+                GPQ_lock.lock();
+                size = GPQ.size();
+                GPQ_lock.unlock();
             }
+            //cout << "unbloack with thread id = " << std::this_thread::get_id() << endl; 
 
             GPQ_lock.lock();
             size = GPQ.size();
@@ -439,9 +423,7 @@ void solver::enumerate(int i) {
             }
             GPQ_lock.unlock();
         }
-        Split_Call.unlock();
     }
-
 
     if (size != 0) {
         active_thread++;
