@@ -244,7 +244,7 @@ void solver::enumerate(int i) {
     if (i <= split_depth && idle_counter > 0) {
         asssign_mutex.lock();
         //cout << "visiting with thread id = " << std::this_thread::get_id() << "and i = " << i <<  endl;
-        if (idle_counter <= 0) {
+        if (idle_counter > 0) {
             bool Split = false;
             // Make sure we have at least two children in the ready list before splitting.
             if (ready_list.size() >= 2) {
@@ -308,7 +308,6 @@ void solver::enumerate(int i) {
             if (Split) {
                 if (Split_Opt == "SINGLE") {
                     idle_counter--;
-                    if (idle_counter < 0) cout << "fuck\n";
                     std::unique_lock<std::mutex> idel_lck(Split_lock);
                     Idel.notify_one();
                     idel_lck.unlock();
@@ -427,6 +426,7 @@ void solver::enumerate(int i) {
 
     if (size != 0) {
         active_thread++;
+        //cout << "enter new area\n";
         enumerate(initial_depth);
     }
 
@@ -464,12 +464,7 @@ void solver::solve_parallel(int thread_num, int pool_size) {
         target.hungarian_solver.fix_row(cur_node, taken_node);
         target.hungarian_solver.fix_column(taken_node, cur_node);
         target.hungarian_solver.solve_dynamic();
-        if (GPQ.size() < pool_size) {
-            GPQ.push(target);
-        }
-        else {
-            Temp.push_back(target);
-        }
+        GPQ.push(target);
     }
 
     for (int i = thread_num - 1; i >= 0; i--) ready_thread.push_back(i);
@@ -485,38 +480,41 @@ void solver::solve_parallel(int thread_num, int pool_size) {
             break;
         }
 
-        if (GPQ.size() <= thread_num) {
+        while (GPQ.size() <= pool_size) {
             auto target = GPQ.front();
             GPQ.pop();
             ready_list.clear();
             for (int i = node_count-1; i >= 0; i--) {
                 if (!target.depCnt[i] && !target.taken_arr[i]) ready_list.push_back(node(i,-1));
             }
-            for (auto node : ready_list) {
+
+            if (ready_list.size() > 1) {
+                for (auto node : ready_list) {
                 int vertex = node.n;
                 //Push split node back into GPQ
-                if (!target.depCnt[vertex] && !target.taken_arr[vertex]) {
-                    int taken_node = vertex;
-                    int cur_node = target.cur_solution.back();
-                    target.taken_arr[taken_node] = 1;
-                    for (int vertex : target.dependent_graph[taken_node]) target.depCnt[vertex]--;
-                    target.cur_cost += cost_graph[cur_node][taken_node].weight;
-                    target.cur_solution.push_back(taken_node);
-                    target.hungarian_solver.fix_row(cur_node, taken_node);
-                    target.hungarian_solver.fix_column(taken_node, cur_node);
-                    target.hungarian_solver.solve_dynamic();
-                    
-                    GPQ.push(target);
+                    if (!target.depCnt[vertex] && !target.taken_arr[vertex]) {
+                        int taken_node = vertex;
+                        int cur_node = target.cur_solution.back();
+                        target.taken_arr[taken_node] = 1;
+                        for (int vertex : target.dependent_graph[taken_node]) target.depCnt[vertex]--;
+                        target.cur_cost += cost_graph[cur_node][taken_node].weight;
+                        target.cur_solution.push_back(taken_node);
+                        target.hungarian_solver.fix_row(cur_node, taken_node);
+                        target.hungarian_solver.fix_column(taken_node, cur_node);
+                        target.hungarian_solver.solve_dynamic();
+                        
+                        GPQ.push(target);
 
-                    target.taken_arr[taken_node] = 0;
-                    for (int vertex : target.dependent_graph[taken_node]) target.depCnt[vertex]++;
-                    target.cur_cost -= cost_graph[cur_node][taken_node].weight;
-                    target.cur_solution.pop_back();
-                    target.hungarian_solver.undue_row(cur_node, taken_node);
-                    target.hungarian_solver.undue_column(taken_node, cur_node);
+                        target.taken_arr[taken_node] = 0;
+                        for (int vertex : target.dependent_graph[taken_node]) target.depCnt[vertex]++;
+                        target.cur_cost -= cost_graph[cur_node][taken_node].weight;
+                        target.cur_solution.pop_back();
+                        target.hungarian_solver.undue_row(cur_node, taken_node);
+                        target.hungarian_solver.undue_column(taken_node, cur_node);
+                    }
                 }
             }
-            if (GPQ.empty()) {
+            else {
                 GPQ.push(target);
             }
         }
@@ -542,18 +540,6 @@ void solver::solve_parallel(int thread_num, int pool_size) {
                 ready_thread.push_back(i);
             }
         }
-        
-        GPQ_lock.lock();
-        if (GPQ.empty()) {
-            while (!Temp.empty()) {
-                if (GPQ.size() < pool_size) {
-                    GPQ.push(Temp.back());
-                    Temp.pop_back();
-                }
-                else break;
-            }
-        }
-        GPQ_lock.unlock();
     }
     
     
