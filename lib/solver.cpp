@@ -71,7 +71,7 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
     auto key = make_pair(bit_string,last_element);
 
     HistoryNode history_node = history_table.retrieve(key);
-    if (history_node.prefix_sched.empty()) return true;
+    if (history_node.prefix_cost == -1) return true;
 
     *found = true;
     int history_prefix = history_node.prefix_cost;
@@ -83,7 +83,6 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
     int imp = history_prefix - cur_cost;
     
     if (imp <= history_lb - best_cost) return false;
-    history_node.prefix_sched = cur_solution;
     history_node.prefix_cost = cur_cost;
     history_node.lower_bound = history_lb - imp;
     *lowerbound = history_node.lower_bound;
@@ -133,14 +132,14 @@ void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
         auto key = make_pair(bit_string,last_element);
     
         if (suffix.empty()) {
-            history_table.insert(key,HistoryNode(prefix_cost,lower_bound,cur_solution));
+            history_table.insert(key,HistoryNode(prefix_cost,lower_bound));
         }
 
         else {
             std::vector<int> suffix_sched;
             int size = suffix_sched.size();
             for (int i = size - 1; i >= 0; i--) suffix_sched.push_back(suffix[i]);
-            history_table.insert(key,HistoryNode(prefix_cost,suffix_cost,prefix_cost+suffix_cost,cur_solution,suffix_sched));
+            history_table.insert(key,HistoryNode(prefix_cost,suffix_cost,prefix_cost+suffix_cost,suffix_sched));
         }
     }
     
@@ -212,7 +211,7 @@ void solver::enumerate(int i) {
                         int last_element = cur_solution.back();
                         auto key = make_pair(bit_string,last_element);
                         temp_lb = dynamic_hungarian(src,dest.n);
-                        history_table.insert(key,HistoryNode(cur_cost,temp_lb,cur_solution));
+                        history_table.insert(key,HistoryNode(cur_cost,temp_lb));
                         hungarian_solver.undue_row(src,dest.n);
                         hungarian_solver.undue_column(dest.n,src);
                     }

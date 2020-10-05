@@ -5,10 +5,10 @@ Static_Enumeration = DH
 Time_Limit = 200
 
 //Size of the initial workload pool
-Pool_Size = 10
+Pool_Size = 8
 
 //Thread size
-Thread_Size = 10
+Thread_Size = 8
 
 //Split level
 Level = 5
