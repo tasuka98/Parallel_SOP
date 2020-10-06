@@ -1,16 +1,21 @@
 #include <vector>
 #include <unordered_map>
 #include <list>
+#include <sys/sysinfo.h>
 #include "history.hpp"
 
 class Hash_Map {
     private:
         int size = 0;
+        size_t cur_size = 0;
+        size_t max_size = 0;
+        size_t node_size = 0;
         vector<list<pair<pair<string,int>,HistoryNode>>> History_table;
     public:
         Hash_Map(int size);
         bool isEmpty();
         uint32_t hash_func(pair<string,int> item);
+        void set_node_t(int node_size);
         void insert(pair<string,int>& item,HistoryNode node);
         HistoryNode retrieve(pair<string,int> item);
 };
@@ -19,6 +24,14 @@ class Hash_Map {
 
 Hash_Map::Hash_Map(int size) {
     this->size = size;
+
+    struct sysinfo info;
+	if(sysinfo(&info) != 0){
+        cout << "can't retrieve sys mem info\n";
+		exit(1);
+	}
+    
+    max_size = (double)info.freeram*0.75;
     History_table.resize(size);
 }
 
@@ -38,6 +51,11 @@ uint32_t Hash_Map::hash_func(pair<string,int> item) {
     return hash;
 }
 */
+
+void Hash_Map::set_node_t(int node_count) {
+    node_size = sizeof(HistoryNode) + sizeof(string) + sizeof(int) + (size_t)node_count;
+    return;
+}
 
 
 void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
@@ -60,12 +78,14 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
         }
     }
 
-    if (!exist) {
+    if (!exist && cur_size < max_size) {
         History_table[key].push_back(make_pair(item,node));
-        return;
+        cur_size += node_size;
     }
     return;
 }
+
+
 
 HistoryNode Hash_Map::retrieve(pair<string,int> item) {
     size_t val = hash<string>{}(item.first);
