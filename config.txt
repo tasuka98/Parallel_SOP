@@ -2,7 +2,7 @@
 Static_Enumeration = DH
 
 //Time limit for the input instance (in seconds)
-Time_Limit = 200
+Time_Limit = 7200
 
 //Size of the initial workload pool
 Pool_Size = 8
@@ -11,7 +11,7 @@ Pool_Size = 8
 Thread_Size = 8
 
 //Split level
-Level = 5
+Level = 20
 
 //Split decision (FULL for pushing extra nodes to the GPQ less or equal to the size of the GPQ, SINGLE for only 1 push)
 Decision = SINGLE

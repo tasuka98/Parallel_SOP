@@ -35,7 +35,6 @@ int main(int argc, char*argv[]) {
         cout << "<Instant Name>\n";
         exit(-1);
     }
-    
     s.solve(argv[1],setting[0],atoi(setting[1].c_str()),atoi(setting[2].c_str()),atoi(setting[3].c_str()),atoi(setting[4].c_str()),setting[5].c_str(),setting[6].c_str());
     return 0;
 }

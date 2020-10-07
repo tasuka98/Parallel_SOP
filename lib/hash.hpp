@@ -1,18 +1,26 @@
 #include <vector>
 #include <unordered_map>
+#include <iostream>
 #include <list>
 #include <mutex>
+#include <cerrno>
+#include <atomic>
+#include <sys/sysinfo.h>
 #include "history.hpp"
 static vector<mutex> hash_lock;
 
 class Hash_Map {
     private:
-        int size = 0;
+        atomic<size_t> cur_size;
+        size_t size = 0;
+        size_t max_size = 0;
+        size_t node_size = 0;
         vector<list<pair<pair<string,int>,HistoryNode>>> History_table;
     public:
         Hash_Map(int size);
         bool isEmpty();
         uint32_t hash_func(pair<string,int> item);
+        void set_node_t(int node_size);
         void insert(pair<string,int>& item,HistoryNode node);
         HistoryNode retrieve(pair<string,int> item);
 };
@@ -21,8 +29,21 @@ class Hash_Map {
 
 Hash_Map::Hash_Map(int size) {
     this->size = size;
+    
+    struct sysinfo info;
+	if(sysinfo(&info) != 0){
+        cout << "can't retrieve sys mem info\n";
+		exit(1);
+	}
+
+    max_size = (double)info.freeram*0.70-size*sizeof(mutex);
     hash_lock = vector<mutex>(size);
     History_table.resize(size);
+}
+
+void Hash_Map::set_node_t(int node_count) {
+    node_size = sizeof(HistoryNode) + sizeof(string) + sizeof(int) + (size_t)node_count;
+    return;
 }
 
 /*
@@ -68,8 +89,14 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
     }
 
     if (!exist) {
-        History_table[key].push_back(make_pair(item,node));
-        hash_lock[key].unlock();
+        if (cur_size < max_size) {
+            History_table[key].push_back(make_pair(item,node));
+            hash_lock[key].unlock();
+            cur_size += node_size;
+        }
+        else {
+            hash_lock[key].unlock();
+        }
         return;
     }
     

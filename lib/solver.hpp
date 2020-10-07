@@ -34,20 +34,15 @@ class solver {
         int MMCP_static_lowerbound = 0;
         int cur_cost = 0;
         int initial_depth = 0;
-        int previous_snode = 0;
-        int suffix_cost = 0;
+        int thread_id = -1;
 
         vector<int> suffix;
         vector<int> cur_solution;
-        vector<vector<int>> dependent_graph;
-        vector<vector<edge>> in_degree;
-        vector<vector<edge>> hung_graph;
-        vector<vector<edge>> cost_graph;
         Hungarian hungarian_solver;
     public:
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
         vector<int> nearest_neightbor();
-        bool HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist);
+        bool HistoryUtilization(int* lowerbound,bool* found);
         int get_maxedgeweight();
         //int dynamic_edb();
         int dynamic_hungarian(int src, int dest);
@@ -56,7 +51,7 @@ class solver {
         void process_solution();
         void assign_historytable(int prefix_cost,int lower_bound,int i);
         void enumerate(int i);
-        void solve(string filename,string enum_opt,long time_limit,int pool_size,int thread_num,int split_num,string split_option,string steal_option);
+        void solve(string filename,string enum_opt,int time_limit,int pool_size,int thread_num,int split_num,string split_option,string steal_option);
         void solve_parallel(int thread_num, int pool_size);
         void retrieve_input(string filename);
         void transitive_redundantcy();
