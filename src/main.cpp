@@ -1,6 +1,6 @@
 #include <iostream>
 #include "../lib/solver.hpp"
-#include "../lib/hungarian.h"
+#include "../lib/hungarian.hpp"
 #include <stdio.h>
 #include <chrono>
 #include <string>

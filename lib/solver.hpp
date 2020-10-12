@@ -1,8 +1,9 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <queue>
 #include <chrono>
-#include "../lib/hungarian.h"
+#include "../lib/hungarian.hpp"
 
 using namespace std;
 
@@ -26,6 +27,10 @@ class node {
 
 class solver {
     private:
+        queue<solver> *local_pool = NULL;
+        int total_lb = 0;
+        int local_lb = -1;
+
         vector<int> depCnt;
         vector<int> taken_arr;
         bool full_solution = false;
@@ -44,11 +49,9 @@ class solver {
         vector<int> nearest_neightbor();
         bool HistoryUtilization(int* lowerbound,bool* found);
         int get_maxedgeweight();
-        //int dynamic_edb();
         int dynamic_hungarian(int src, int dest);
-        //int mmcp_lb();
-        int History_LB();
-        void process_solution();
+        void assign_workload(int taken_n, int lb);
+        void push_to_global_pool();
         void assign_historytable(int prefix_cost,int lower_bound,int i);
         void enumerate(int i);
         void solve(string filename,string enum_opt,int time_limit,int pool_size,int thread_num,int split_num,string split_option,string steal_option);
@@ -56,5 +59,4 @@ class solver {
         void retrieve_input(string filename);
         void transitive_redundantcy();
         void sort_weight(vector<vector<edge>>& graph);
-        void print_dep();
 };

@@ -10,11 +10,11 @@ Pool_Size = 8
 //Thread size
 Thread_Size = 8
 
-//Split level
-Level = 20
+//Assign workload level (percentage of total number of levels in the state tree)
+Level = 50
 
 //Split decision (FULL for pushing extra nodes to the GPQ less or equal to the size of the GPQ, SINGLE for only 1 push)
 Decision = SINGLE
 
-//Thread stealing option (ASYNC for asynchronous stealing and SYNC for synchronous stealing)
-Decision = SYNC
+//Thread stealing option (DEPTH for stealing from active threads with the least height, and LB for stealing from active threads with lowest averge LB)
+Decision = LB

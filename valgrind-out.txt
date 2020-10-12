@@ -1,0 +1,494 @@
+==2820== Memcheck, a memory error detector
+==2820== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==2820== Using Valgrind-3.15.0-608cb11914-20190413 and LibVEX; rerun with -h for copyright info
+==2820== Command: ./sop_solver test3.sop
+==2820== Parent PID: 8
+==2820== 
+--2820-- 
+--2820-- Valgrind options:
+--2820--    --leak-check=full
+--2820--    --show-leak-kinds=all
+--2820--    --track-origins=yes
+--2820--    --verbose
+--2820--    --log-file=valgrind-out.txt
+--2820-- Contents of /proc/version:
+--2820--   Linux version 4.4.0-19041-Microsoft (Microsoft@Microsoft.com) (gcc version 5.4.0 (GCC) ) #488-Microsoft Mon Sep 01 13:43:00 PST 2020
+--2820-- 
+--2820-- Arch and hwcaps: AMD64, LittleEndian, amd64-cx16-lzcnt-rdtscp-sse3-ssse3-avx-avx2-bmi-f16c-rdrand
+--2820-- Page sizes: currently 4096, max supported 4096
+--2820-- Valgrind library directory: /usr/lib/x86_64-linux-gnu/valgrind
+--2820-- Reading syms from /home/tasuka98/Parallel_SOP/sop_solver
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/ld-2.31.so
+--2820--   Considering /usr/lib/x86_64-linux-gnu/ld-2.31.so ..
+--2820--   .. CRC mismatch (computed 387b17ea wanted d28cf5ef)
+--2820--   Considering /lib/x86_64-linux-gnu/ld-2.31.so ..
+--2820--   .. CRC mismatch (computed 387b17ea wanted d28cf5ef)
+--2820--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/ld-2.31.so ..
+--2820--   .. CRC is valid
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/valgrind/memcheck-amd64-linux
+--2820--    object doesn't have a symbol table
+--2820--    object doesn't have a dynamic symbol table
+--2820-- Scheduler: using generic scheduler lock implementation.
+--2820-- Reading suppressions file: /usr/lib/x86_64-linux-gnu/valgrind/default.supp
+==2820== embedded gdbserver: reading from /tmp/vgdb-pipe-from-vgdb-to-2820-by-tasuka98-on-???
+==2820== embedded gdbserver: writing to   /tmp/vgdb-pipe-to-vgdb-from-2820-by-tasuka98-on-???
+==2820== embedded gdbserver: shared mem   /tmp/vgdb-pipe-shared-mem-vgdb-2820-by-tasuka98-on-???
+==2820== 
+==2820== TO CONTROL THIS PROCESS USING vgdb (which you probably
+==2820== don't want to do, unless you know exactly what you're doing,
+==2820== or are doing some strange experiment):
+==2820==   /usr/lib/x86_64-linux-gnu/valgrind/../../bin/vgdb --pid=2820 ...command...
+==2820== 
+==2820== TO DEBUG THIS PROCESS USING GDB: start GDB like this
+==2820==   /path/to/gdb ./sop_solver
+==2820== and then give GDB the following command
+==2820==   target remote | /usr/lib/x86_64-linux-gnu/valgrind/../../bin/vgdb --pid=2820
+==2820== --pid is optional if only one valgrind process is running
+==2820== 
+==2820== error calling PR_SET_PTRACER, vgdb might block
+--2820-- REDIR: 0x4022d80 (ld-linux-x86-64.so.2:strlen) redirected to 0x580c9ce2 (???)
+--2820-- REDIR: 0x4022b50 (ld-linux-x86-64.so.2:index) redirected to 0x580c9cfc (???)
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_core-amd64-linux.so
+--2820--    object doesn't have a symbol table
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so
+--2820--    object doesn't have a symbol table
+==2820== WARNING: new redirection conflicts with existing -- ignoring it
+--2820--     old: 0x04022d80 (strlen              ) R-> (0000.0) 0x580c9ce2 ???
+--2820--     new: 0x04022d80 (strlen              ) R-> (2007.0) 0x0483f060 strlen
+--2820-- REDIR: 0x401f560 (ld-linux-x86-64.so.2:strcmp) redirected to 0x483ffd0 (strcmp)
+--2820-- REDIR: 0x40232e0 (ld-linux-x86-64.so.2:mempcpy) redirected to 0x4843a20 (mempcpy)
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.28
+--2820--    object doesn't have a symbol table
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/libgcc_s.so.1
+--2820--    object doesn't have a symbol table
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/libpthread-2.31.so
+--2820--   Considering /usr/lib/debug/.build-id/77/5cbbfff814456660786780b0b3b40096b4c05e.debug ..
+--2820--   .. build-id is valid
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/libc-2.31.so
+--2820--   Considering /usr/lib/x86_64-linux-gnu/libc-2.31.so ..
+--2820--   .. CRC mismatch (computed a6f43087 wanted 6555436e)
+--2820--   Considering /lib/x86_64-linux-gnu/libc-2.31.so ..
+--2820--   .. CRC mismatch (computed a6f43087 wanted 6555436e)
+--2820--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libc-2.31.so ..
+--2820--   .. CRC is valid
+--2820-- Reading syms from /usr/lib/x86_64-linux-gnu/libm-2.31.so
+--2820--   Considering /usr/lib/x86_64-linux-gnu/libm-2.31.so ..
+--2820--   .. CRC mismatch (computed 327d785f wanted 751f5509)
+--2820--   Considering /lib/x86_64-linux-gnu/libm-2.31.so ..
+--2820--   .. CRC mismatch (computed 327d785f wanted 751f5509)
+--2820--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libm-2.31.so ..
+--2820--   .. CRC is valid
+--2820-- REDIR: 0x4b14600 (libc.so.6:memmove) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b13900 (libc.so.6:strncpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14930 (libc.so.6:strcasecmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b13220 (libc.so.6:strcat) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b13960 (libc.so.6:rindex) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b15dd0 (libc.so.6:rawmemchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b30e60 (libc.so.6:wmemchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b309a0 (libc.so.6:wcscmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14760 (libc.so.6:mempcpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14590 (libc.so.6:bcmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b13890 (libc.so.6:strncmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b132d0 (libc.so.6:strcmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b146c0 (libc.so.6:memset) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b30960 (libc.so.6:wcschr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b137f0 (libc.so.6:strnlen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b133b0 (libc.so.6:strcspn) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14980 (libc.so.6:strncasecmp) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b13350 (libc.so.6:strcpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14ad0 (libc.so.6:memcpy@@GLIBC_2.14) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b320d0 (libc.so.6:wcsnlen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b309e0 (libc.so.6:wcscpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b139a0 (libc.so.6:strpbrk) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b13280 (libc.so.6:index) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b137b0 (libc.so.6:strlen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b1cd20 (libc.so.6:memrchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b149d0 (libc.so.6:strcasecmp_l) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14550 (libc.so.6:memchr) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b30ab0 (libc.so.6:wcslen) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b13c60 (libc.so.6:strspn) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b148d0 (libc.so.6:stpncpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14870 (libc.so.6:stpcpy) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b15e10 (libc.so.6:strchrnul) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4b14a20 (libc.so.6:strncasecmp_l) redirected to 0x48311d0 (_vgnU_ifunc_wrapper)
+--2820-- REDIR: 0x4bfc300 (libc.so.6:__strrchr_avx2) redirected to 0x483ea10 (rindex)
+--2820-- REDIR: 0x4b0e260 (libc.so.6:malloc) redirected to 0x483b780 (malloc)
+--2820-- REDIR: 0x4bfc4d0 (libc.so.6:__strlen_avx2) redirected to 0x483ef40 (strlen)
+--2820-- REDIR: 0x4bf8ac0 (libc.so.6:__memcmp_avx2_movbe) redirected to 0x48421e0 (bcmp)
+--2820-- REDIR: 0x4bf79d0 (libc.so.6:__strcmp_avx2) redirected to 0x483fed0 (strcmp)
+--2820-- REDIR: 0x48fcc10 (libstdc++.so.6:operator new(unsigned long)) redirected to 0x483bdf0 (operator new(unsigned long))
+--2820-- REDIR: 0x4b14120 (libc.so.6:__GI_strstr) redirected to 0x4843ca0 (__strstr_sse2)
+--2820-- REDIR: 0x48fcc70 (libstdc++.so.6:operator new[](unsigned long)) redirected to 0x483c510 (operator new[](unsigned long))
+--2820-- REDIR: 0x4bf8330 (libc.so.6:__memchr_avx2) redirected to 0x4840050 (memchr)
+--2820-- REDIR: 0x4bff4e0 (libc.so.6:__memcpy_avx_unaligned_erms) redirected to 0x48429f0 (memmove)
+--2820-- REDIR: 0x48fae60 (libstdc++.so.6:operator delete(void*)) redirected to 0x483cf50 (operator delete(void*))
+--2820-- REDIR: 0x48fae90 (libstdc++.so.6:operator delete[](void*)) redirected to 0x483d6e0 (operator delete[](void*))
+--2820-- REDIR: 0x4b0e850 (libc.so.6:free) redirected to 0x483c9d0 (free)
+==2820== Invalid read of size 4
+==2820==    at 0x112706: solver::retrieve_input(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:690)
+==2820==    by 0x111D45: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:603)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820==  Address 0x4dce34c is 0 bytes after a block of size 76 alloc'd
+==2820==    at 0x483BE63: operator new(unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x125457: __gnu_cxx::new_allocator<int>::allocate(unsigned long, void const*) (new_allocator.h:114)
+==2820==    by 0x1225D1: std::allocator_traits<std::allocator<int> >::allocate(std::allocator<int>&, unsigned long) (alloc_traits.h:444)
+==2820==    by 0x11E397: std::_Vector_base<int, std::allocator<int> >::_M_allocate(unsigned long) (stl_vector.h:343)
+==2820==    by 0x11FAA0: std::_Vector_base<int, std::allocator<int> >::_M_create_storage(unsigned long) (stl_vector.h:358)
+==2820==    by 0x11B98C: std::_Vector_base<int, std::allocator<int> >::_Vector_base(unsigned long, std::allocator<int> const&) (stl_vector.h:302)
+==2820==    by 0x117A8A: std::vector<int, std::allocator<int> >::vector(std::vector<int, std::allocator<int> > const&) (stl_vector.h:552)
+==2820==    by 0x120898: void __gnu_cxx::new_allocator<std::vector<int, std::allocator<int> > >::construct<std::vector<int, std::allocator<int> >, std::vector<int, std::allocator<int> > const&>(std::vector<int, std::allocator<int> >*, std::vector<int, std::allocator<int> > const&) (new_allocator.h:147)
+==2820==    by 0x11C5EC: void std::allocator_traits<std::allocator<std::vector<int, std::allocator<int> > > >::construct<std::vector<int, std::allocator<int> >, std::vector<int, std::allocator<int> > const&>(std::allocator<std::vector<int, std::allocator<int> > >&, std::vector<int, std::allocator<int> >*, std::vector<int, std::allocator<int> > const&) (alloc_traits.h:484)
+==2820==    by 0x11C713: void std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >::_M_realloc_insert<std::vector<int, std::allocator<int> > const&>(__gnu_cxx::__normal_iterator<std::vector<int, std::allocator<int> >*, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > > >, std::vector<int, std::allocator<int> > const&) (vector.tcc:449)
+==2820==    by 0x1185A3: std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >::push_back(std::vector<int, std::allocator<int> > const&) (stl_vector.h:1195)
+==2820==    by 0x112484: solver::retrieve_input(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:676)
+==2820== 
+--2820-- REDIR: 0x4bff960 (libc.so.6:__memset_avx2_unaligned_erms) redirected to 0x48428e0 (memset)
+--2820-- REDIR: 0x48fcc50 (libstdc++.so.6:operator new(unsigned long, std::nothrow_t const&)) redirected to 0x483c080 (operator new(unsigned long, std::nothrow_t const&))
+--2820-- REDIR: 0x4bfc110 (libc.so.6:__strchrnul_avx2) redirected to 0x4843540 (strchrnul)
+--2820-- REDIR: 0x4bff4c0 (libc.so.6:__mempcpy_avx_unaligned_erms) redirected to 0x4843660 (mempcpy)
+--2820-- REDIR: 0x4b0fc90 (libc.so.6:calloc) redirected to 0x483dce0 (calloc)
+==2820== Thread 2:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x12C20F: void std::__invoke_impl<void, void (solver::*)(int), solver, int>(std::__invoke_memfun_ref, void (solver::*&&)(int), solver&&, int&&) (invoke.h:66)
+==2820==    by 0x12C0E2: std::__invoke_result<void (solver::*)(int), solver, int>::type std::__invoke<void (solver::*)(int), solver, int>(void (solver::*&&)(int), solver&&, int&&) (invoke.h:95)
+==2820==    by 0x12BFF2: void std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::_M_invoke<0ul, 1ul, 2ul>(std::_Index_tuple<0ul, 1ul, 2ul>) (thread:244)
+==2820==    by 0x12BF78: std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::operator()() (thread:251)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FC13: solver::enumerate(int) (solver.cpp:273)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x12C20F: void std::__invoke_impl<void, void (solver::*)(int), solver, int>(std::__invoke_memfun_ref, void (solver::*&&)(int), solver&&, int&&) (invoke.h:66)
+==2820==    by 0x12C0E2: std::__invoke_result<void (solver::*)(int), solver, int>::type std::__invoke<void (solver::*)(int), solver, int>(void (solver::*&&)(int), solver&&, int&&) (invoke.h:95)
+==2820==    by 0x12BFF2: void std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::_M_invoke<0ul, 1ul, 2ul>(std::_Index_tuple<0ul, 1ul, 2ul>) (thread:244)
+==2820==    by 0x12BF78: std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::operator()() (thread:251)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== Thread 5:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FC13: solver::enumerate(int) (solver.cpp:273)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== Thread 8:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FC13: solver::enumerate(int) (solver.cpp:273)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== Thread 3:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+--2820-- REDIR: 0x48fae70 (libstdc++.so.6:operator delete(void*, unsigned long)) redirected to 0x483d160 (operator delete(void*, unsigned long))
+==2820== Thread 1:
+==2820== Mismatched free() / delete / delete []
+==2820==    at 0x483D1CF: operator delete(void*, unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x111B3A: solver::solve_parallel(int, int) (solver.cpp:598)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820==  Address 0x4df4060 is 0 bytes inside a block of size 32 alloc'd
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== HEAP SUMMARY:
+==2820==     in use at exit: 0 bytes in 0 blocks
+==2820==   total heap usage: 458,557 allocs, 458,557 frees, 94,760,879 bytes allocated
+==2820== 
+==2820== All heap blocks were freed -- no leaks are possible
+==2820== 
+==2820== ERROR SUMMARY: 79 errors from 9 contexts (suppressed: 0 from 0)
+==2820== 
+==2820== 1 errors in context 1 of 9:
+==2820== Mismatched free() / delete / delete []
+==2820==    at 0x483D1CF: operator delete(void*, unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x111B3A: solver::solve_parallel(int, int) (solver.cpp:598)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820==  Address 0x4df4060 is 0 bytes inside a block of size 32 alloc'd
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== 1 errors in context 2 of 9:
+==2820== Thread 3:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== 1 errors in context 3 of 9:
+==2820== Thread 8:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FC13: solver::enumerate(int) (solver.cpp:273)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== 1 errors in context 4 of 9:
+==2820== Thread 5:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FC13: solver::enumerate(int) (solver.cpp:273)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== 1 errors in context 5 of 9:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== 1 errors in context 6 of 9:
+==2820== Thread 1:
+==2820== Invalid read of size 4
+==2820==    at 0x112706: solver::retrieve_input(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:690)
+==2820==    by 0x111D45: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:603)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820==  Address 0x4dce34c is 0 bytes after a block of size 76 alloc'd
+==2820==    at 0x483BE63: operator new(unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x125457: __gnu_cxx::new_allocator<int>::allocate(unsigned long, void const*) (new_allocator.h:114)
+==2820==    by 0x1225D1: std::allocator_traits<std::allocator<int> >::allocate(std::allocator<int>&, unsigned long) (alloc_traits.h:444)
+==2820==    by 0x11E397: std::_Vector_base<int, std::allocator<int> >::_M_allocate(unsigned long) (stl_vector.h:343)
+==2820==    by 0x11FAA0: std::_Vector_base<int, std::allocator<int> >::_M_create_storage(unsigned long) (stl_vector.h:358)
+==2820==    by 0x11B98C: std::_Vector_base<int, std::allocator<int> >::_Vector_base(unsigned long, std::allocator<int> const&) (stl_vector.h:302)
+==2820==    by 0x117A8A: std::vector<int, std::allocator<int> >::vector(std::vector<int, std::allocator<int> > const&) (stl_vector.h:552)
+==2820==    by 0x120898: void __gnu_cxx::new_allocator<std::vector<int, std::allocator<int> > >::construct<std::vector<int, std::allocator<int> >, std::vector<int, std::allocator<int> > const&>(std::vector<int, std::allocator<int> >*, std::vector<int, std::allocator<int> > const&) (new_allocator.h:147)
+==2820==    by 0x11C5EC: void std::allocator_traits<std::allocator<std::vector<int, std::allocator<int> > > >::construct<std::vector<int, std::allocator<int> >, std::vector<int, std::allocator<int> > const&>(std::allocator<std::vector<int, std::allocator<int> > >&, std::vector<int, std::allocator<int> >*, std::vector<int, std::allocator<int> > const&) (alloc_traits.h:484)
+==2820==    by 0x11C713: void std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >::_M_realloc_insert<std::vector<int, std::allocator<int> > const&>(__gnu_cxx::__normal_iterator<std::vector<int, std::allocator<int> >*, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > > >, std::vector<int, std::allocator<int> > const&) (vector.tcc:449)
+==2820==    by 0x1185A3: std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >::push_back(std::vector<int, std::allocator<int> > const&) (stl_vector.h:1195)
+==2820==    by 0x112484: solver::retrieve_input(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:676)
+==2820== 
+==2820== 
+==2820== 7 errors in context 7 of 9:
+==2820== Thread 8:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== 24 errors in context 8 of 9:
+==2820== Thread 2:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FC13: solver::enumerate(int) (solver.cpp:273)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x12C20F: void std::__invoke_impl<void, void (solver::*)(int), solver, int>(std::__invoke_memfun_ref, void (solver::*&&)(int), solver&&, int&&) (invoke.h:66)
+==2820==    by 0x12C0E2: std::__invoke_result<void (solver::*)(int), solver, int>::type std::__invoke<void (solver::*)(int), solver, int>(void (solver::*&&)(int), solver&&, int&&) (invoke.h:95)
+==2820==    by 0x12BFF2: void std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::_M_invoke<0ul, 1ul, 2ul>(std::_Index_tuple<0ul, 1ul, 2ul>) (thread:244)
+==2820==    by 0x12BF78: std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::operator()() (thread:251)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== 
+==2820== 42 errors in context 9 of 9:
+==2820== Conditional jump or move depends on uninitialised value(s)
+==2820==    at 0x10FBAF: solver::enumerate(int) (solver.cpp:271)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x11037A: solver::enumerate(int) (solver.cpp:360)
+==2820==    by 0x110AEF: solver::enumerate(int) (solver.cpp:468)
+==2820==    by 0x12C20F: void std::__invoke_impl<void, void (solver::*)(int), solver, int>(std::__invoke_memfun_ref, void (solver::*&&)(int), solver&&, int&&) (invoke.h:66)
+==2820==    by 0x12C0E2: std::__invoke_result<void (solver::*)(int), solver, int>::type std::__invoke<void (solver::*)(int), solver, int>(void (solver::*&&)(int), solver&&, int&&) (invoke.h:95)
+==2820==    by 0x12BFF2: void std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::_M_invoke<0ul, 1ul, 2ul>(std::_Index_tuple<0ul, 1ul, 2ul>) (thread:244)
+==2820==    by 0x12BF78: std::thread::_Invoker<std::tuple<void (solver::*)(int), solver, int> >::operator()() (thread:251)
+==2820==  Uninitialised value was created by a heap allocation
+==2820==    at 0x483C583: operator new[](unsigned long) (in /usr/lib/x86_64-linux-gnu/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2820==    by 0x110F43: solver::solve_parallel(int, int) (solver.cpp:495)
+==2820==    by 0x11213D: solver::solve(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, int, int, int, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) (solver.cpp:643)
+==2820==    by 0x10BE5B: main (main.cpp:38)
+==2820== 
+==2820== ERROR SUMMARY: 79 errors from 9 contexts (suppressed: 0 from 0)
