@@ -23,6 +23,7 @@ class Hash_Map {
         size_t get_max_size();
         size_t get_cur_size();
         uint32_t hash_func(pair<string,int> item);
+        void increase_size(size_t size_incre);
         void set_node_t(int node_size);
         void insert(pair<string,int>& item,HistoryNode node);
         HistoryNode retrieve(pair<string,int> item);
@@ -48,6 +49,11 @@ size_t Hash_Map::get_max_size() {
 
 size_t Hash_Map::get_cur_size() {
     return cur_size;
+}
+
+void Hash_Map::increase_size(size_t size_incre) {
+    cur_size += size_incre;
+    return;
 }
 
 void Hash_Map::set_node_t(int node_count) {

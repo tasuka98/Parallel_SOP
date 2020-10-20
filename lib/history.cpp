@@ -11,4 +11,3 @@ HistoryNode::HistoryNode(){
     prefix_cost = -1;
 	lower_bound = -1;
 }
-

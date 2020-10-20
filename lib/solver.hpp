@@ -40,18 +40,19 @@ class solver {
         int cur_cost = 0;
         int initial_depth = 0;
         int thread_id = -1;
-
-        vector<int> suffix;
+        
         vector<int> cur_solution;
         Hungarian hungarian_solver;
     public:
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
-        vector<int> nearest_neightbor();
+        vector<int> nearest_neightbor(vector<int>* partial_solution,int* initial_cost);
+        vector<int> roll_out();
         bool HistoryUtilization(int* lowerbound,bool* found);
+        bool check_satisfiablity(int* local_cost, vector<int>* tour);
         bool check_tlimit();
-        bool take_from_local();
         int get_maxedgeweight();
         int dynamic_hungarian(int src, int dest);
+        int tour_improvement(vector<int> initial_solution,int initial_cost);
         void assign_parameter(vector<string> setting);
         void check_workload_request(int i);
         void notify_finished();
@@ -59,7 +60,7 @@ class solver {
         void untake_node(int src, int dest, int taken_node);
         void assign_workload(int taken_n, int lb);
         void push_to_global_pool();
-        void assign_historytable(int prefix_cost,int lower_bound,int i);
+        void append_suffix();
         void enumerate(int i);
         void solve(string filename);
         void solve_parallel(int thread_num, int pool_size);
