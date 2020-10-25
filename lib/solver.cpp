@@ -16,7 +16,7 @@
 
 using namespace std;
 
-Hash_Map history_table(1237935);
+Hash_Map history_table(12582917);
 bool optimal_found = false;
 int graph_index = 0;
 int enumerated_nodes = 0;
@@ -32,7 +32,7 @@ int lb = 0;
 int suffix_cost = 0;
 int previous_snode = 0;
 
-std::chrono::duration<double> current_time = std::chrono::duration<double>(0);
+std::chrono::time_point<std::chrono::system_clock> start_time_limit;
 jmp_buf buf;
 vector<int> raedy_list;
 vector<int> suffix;
@@ -41,10 +41,17 @@ vector<bool> picked_list;
 int* depCnt;
 int* taken_arr;
 
-void solver::process_solution() {
-    if (cur_cost < best_cost) {
-        best_solution = cur_solution;
-        best_cost = cur_cost;
+void solver::push_to_historytable(pair<string,int> key,int lower_bound,int i) {
+    HistoryNode node;
+    node.prefix_cost = cur_cost;
+    if (full_solution) node.lower_bound = suffix_cost;
+    else node.lower_bound = lower_bound;
+
+    if (history_table.get_cur_size() < 0.8 * history_table.get_max_size()) {
+        history_table.insert(key,node);
+    }
+    else if (i < int(0.5 * node_count)) {
+        history_table.insert(key,node);
     }
     return;
 }
@@ -56,18 +63,10 @@ int solver::dynamic_hungarian(int src, int dest) {
     return hungarian_solver.get_matching_cost()/2;
 }
 
-bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
-    string bit_string(node_count, '0');
-
-    for (auto node : cur_solution) {
-        bit_string[node] = '1';
-    }   
-
-    int last_element = cur_solution.back();
-    auto key = make_pair(bit_string,last_element);
-
+bool solver::HistoryUtilization(pair<string,int>* key,int* lowerbound,bool* found) {
     HistoryNode history_node = history_table.retrieve(key);
-    if (history_node.prefix_sched.empty()) return true;
+
+    if (history_node.prefix_cost == -1) return true;
 
     *found = true;
     int history_prefix = history_node.prefix_cost;
@@ -79,80 +78,11 @@ bool solver::HistoryUtilization(int* lowerbound,bool* found,bool suffix_exist) {
     int imp = history_prefix - cur_cost;
     
     if (imp <= history_lb - best_cost) return false;
-    history_node.prefix_sched = cur_solution;
     history_node.prefix_cost = cur_cost;
     history_node.lower_bound = history_lb - imp;
     *lowerbound = history_node.lower_bound;
-    
-    if (!history_node.suffix_sched.empty()) {
-        vector<int> temp = cur_solution;
-        vector<int> suffix_sched;
-        suffix_sched = history_node.suffix_sched;
-        int suf_cost = history_node.suffix_cost;
-        temp.insert(temp.end(),suffix_sched.begin(),suffix_sched.end());
-        best_solution = temp;
-        best_cost = cur_cost + suf_cost;
-        history_node.lower_bound = best_cost;
-        *lowerbound = history_node.lower_bound;
-        history_table.insert(key,history_node);
-        return false;
-    }
-    else {
-        if (suffix_exist) {
-             for (int i = suffix.size() - 1; i >= 0; i--) {
-                history_node.suffix_sched.push_back(suffix[i]);
-            }
-            history_node.suffix_cost = suffix_cost;
-            history_node.lower_bound = cur_cost + suffix_cost;
-            history_table.insert(key,history_node);
-            return false;
-        }
-    }
 
-    history_table.insert(key,history_node);
-    return true;
-}
-
-bool solver::LB_Check(int src, int dest) {
-    if (cur_cost > best_cost) return false;
-    //Dyanmic hungarian lower bound
-    int LB = 0;
-    bool found = false;
-    bool decision = HistoryUtilization(&LB,&found,false);
-
-    if (found) {
-        if (!decision) return false;
-        if (LB >= best_cost) return false;
-    }
-    else {
-        hungarian_solver.solve_dynamic();
-        LB = hungarian_solver.get_matching_cost()/2;
-        if (LB >= best_cost) return false;
-        string bit_string(node_count, '0');
-        for (auto node : cur_solution) bit_string[node] = '1';
-        int last_element = cur_solution.back();
-        auto key = make_pair(bit_string,last_element);
-        history_table.insert(key,HistoryNode(cur_cost,LB,cur_solution));
-    }
-
-    /*
-
-    int lower_bound1 = dynamic_edb();
-
-    if (lower_bound1 + cur_cost >= best_cost) {
-    
-
-        std::cout << "the current solution is";
-        for (int i : cur_solution) {
-            std::cout << i << ",";
-        }
-        std::cout << std::endl;
-        std::cout << "the lower bound is " << lower_bound1 << std::endl;
-        calculated_bounds++;
-        return false;
-    }
-    */
-
+    history_table.insert(*key,history_node);
     return true;
 }
 
@@ -162,33 +92,6 @@ int solver::dynamic_edb() {
     recently_added = picked_node;
     return mmcp_lb();
 }
-
-void solver::assign_historytable(int prefix_cost,int lower_bound,int i) {
-    bool taken = false;
-    int lb = 0;
-
-    if (suffix.empty()) HistoryUtilization(&lb,&taken,false);
-    else HistoryUtilization(&lb,&taken,true);
-
-    if (!taken) {
-        string bit_string(node_count, '0');
-        for (auto node : cur_solution) bit_string[node] = '1';
-        int last_element = cur_solution.back();
-        auto key = make_pair(bit_string,last_element);
-    
-        if (suffix.empty()) {
-            history_table.insert(key,HistoryNode(prefix_cost,lower_bound,cur_solution));
-        }
-
-        else {
-            std::vector<int> suffix_sched;
-            int size = suffix_sched.size();
-            for (int i = size - 1; i >= 0; i--) suffix_sched.push_back(suffix[i]);
-            history_table.insert(key,HistoryNode(prefix_cost,suffix_cost,prefix_cost+suffix_cost,cur_solution,suffix_sched));
-        }
-    }
-    
-}   
 
 bool bound_sort(const node& src,const node& dest) {
     if (src.lb == dest.lb) return src.nc > dest.nc;
@@ -201,8 +104,6 @@ bool nearest_sort(const node& src,const node& dest) {
 }
 
 void solver::enumerate(int i) {
-    
-    auto start_time = chrono::high_resolution_clock::now();
     enumerated_nodes++;
     
     vector<node> ready_list;
@@ -219,7 +120,13 @@ void solver::enumerate(int i) {
     int u = 0;
     int v = 0;
 
-    int bound = INT_MAX;
+    string bit_string(node_count, '0');
+    for (auto node : cur_solution) {
+        bit_string[node] = '1';
+    }   
+    int last_element = cur_solution.back();
+    auto key = make_pair(bit_string,last_element);
+
     if (!cur_solution.empty()) {
         for (int i = 0; i < (int)ready_list.size(); i++) {
             node dest = ready_list[i];
@@ -236,33 +143,34 @@ void solver::enumerate(int i) {
                 i--;
                 continue;
             }
-            if (cur_solution.size() == node_count) {
+            if (cur_solution.size() == (unsigned)node_count) {
                 if (cur_cost < best_cost) {
                     best_solution = cur_solution;
                     best_cost = cur_cost;
-                    cur_solution.pop_back();
-                    cur_cost -= cost_graph[src][dest.n].weight;
-                    ready_list.erase(ready_list.begin()+i);
-                    i--;
-                    continue;
                 }
+                cur_solution.pop_back();
+                cur_cost -= cost_graph[src][dest.n].weight;
+                ready_list.erase(ready_list.begin()+i);
+                i--;
+                continue;
             }
             
             else {
-                bool decision = HistoryUtilization(&temp_lb,&taken,false);
+                key.first[dest.n] = '1';
+                key.second = dest.n;
+                bool decision = HistoryUtilization(&key,&temp_lb,&taken);
+
                 if (!taken) {
-                    string bit_string(node_count, '0');
-                    for (auto node : cur_solution) bit_string[node] = '1';
-                    int last_element = cur_solution.back();
-                    auto key = make_pair(bit_string,last_element);
                     temp_lb = dynamic_hungarian(src,dest.n);
-                    history_table.insert(key,HistoryNode(cur_cost,temp_lb,cur_solution));
+                    push_to_historytable(key,temp_lb,i);
                     hungarian_solver.undue_row(src,dest.n);
                     hungarian_solver.undue_column(dest.n,src);
                 }
                 else if (taken && !decision) {
                     cur_solution.pop_back();
                     cur_cost -= cost_graph[src][dest.n].weight;
+                    key.first[dest.n] = '0';
+                    key.second = last_element;
                     ready_list.erase(ready_list.begin()+i);
                     i--;
                     continue;
@@ -270,6 +178,8 @@ void solver::enumerate(int i) {
                 if (temp_lb >= best_cost) {
                     cur_solution.pop_back();
                     cur_cost -= cost_graph[src][dest.n].weight;
+                    key.first[dest.n] = '0';
+                    key.second = last_element;
                     ready_list.erase(ready_list.begin()+i);
                     i--;
                     continue;
@@ -278,23 +188,15 @@ void solver::enumerate(int i) {
                 cur_cost -= cost_graph[src][dest.n].weight;
                 ready_list[i].nc = cost_graph[src][dest.n].weight;
                 ready_list[i].lb = temp_lb;
+                key.first[dest.n] = '0';
+                key.second = last_element;
             }
         }
         if (enum_option == "DH") sort(ready_list.begin(),ready_list.end(),bound_sort);
         else if (enum_option == "NN") sort(ready_list.begin(),ready_list.end(),nearest_sort);
     }
 
-    auto end_time = chrono::high_resolution_clock::now();
-    current_time += end_time - start_time;
-
-    if (current_time.count() > t_limit) {
-        longjmp(buf, 1);
-        return;
-    }
-
     while(!ready_list.empty()) {
-        start_time = chrono::high_resolution_clock::now();
-        bound = ready_list.back().lb;
         taken_node = ready_list.back().n;
         ready_list.pop_back();
         if (!cur_solution.empty()) {
@@ -309,14 +211,7 @@ void solver::enumerate(int i) {
         cur_solution.push_back(taken_node);
         taken_arr[taken_node] = 1;
         full_solution = false;
-        suffix.clear();
         suffix_cost = 0;
-        previous_snode = 0;
-        end_time = chrono::high_resolution_clock::now();
-        current_time += end_time - start_time;
-        if (current_time.count() > t_limit) {
-            longjmp(buf, 1);
-        }
         ///////
         
         //cout << "current solution is";
@@ -326,38 +221,19 @@ void solver::enumerate(int i) {
         /////
 
         enumerate(i+1);
-        
-        if (current_time.count() > t_limit) {
-            return;
-        }
-        start_time = chrono::high_resolution_clock::now();
+
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
         taken_arr[taken_node] = 0;
         
-        if (bound != -1) assign_historytable(cur_cost,bound,i);
-        else {
-            bound = hungarian_solver.get_matching_cost()/2;
-            assign_historytable(cur_cost,bound,i);
-        }
-        
-        if ((int)cur_solution.size() == node_count) {
-            full_solution = true;
-            previous_snode = cur_solution.back();
-        }
-        if (full_solution) {
-            suffix.push_back(cur_solution.back());
-            suffix_cost += cost_graph[cur_solution.back()][previous_snode].weight;
-            previous_snode = cur_solution.back();
-        }
         cur_solution.pop_back();
         cur_cost -= cost_graph[u][v].weight;
         if (cur_solution.size() >= 2) {
             hungarian_solver.undue_row(u,v);
 		    hungarian_solver.undue_column(v,u);
         }
-        end_time = chrono::high_resolution_clock::now();
-        current_time += end_time - start_time;
-        if (current_time.count() > t_limit) {
+
+        auto cur_time = std::chrono::system_clock::now();
+        if (std::chrono::duration<double>(cur_time - start_time_limit).count() > t_limit) {
             longjmp(buf, 1);
         }
         
@@ -402,11 +278,15 @@ void solver::solve(string filename,string enum_opt,long time_limit) {
     cur_cost = 0;
 
     auto start_time = chrono::high_resolution_clock::now();
+    start_time_limit = std::chrono::system_clock::now();
     if (setjmp(buf)) {
         cout << "Timed out!" << endl;
     }
     else {
-        enumerate(0);
+        cur_solution.push_back(0);
+        taken_arr[0] = 1;
+        for (int vertex : dependent_graph[0]) depCnt[vertex]--;
+        enumerate(1);
     }
     auto end_time = chrono::high_resolution_clock::now();
     auto total_time = chrono::duration_cast<std::chrono::microseconds>( end_time - start_time ).count();
