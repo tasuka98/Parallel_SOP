@@ -3,6 +3,8 @@
 
 using namespace std;
 
+#pragma once
+
 class HistoryNode {
 	public:
         HistoryNode(int prefix_cost, int bound);

@@ -16,7 +16,7 @@ class Hash_Map {
         size_t size = 0;
         size_t max_size = 0;
         size_t node_size = 0;
-        vector<list<pair<pair<string,int>,HistoryNode>>> History_table;
+        vector<list<pair<pair<string,int>,HistoryNode*>>> History_table;
     public:
         Hash_Map(int size);
         bool isEmpty();
@@ -25,8 +25,8 @@ class Hash_Map {
         uint32_t hash_func(pair<string,int> item);
         void increase_size(size_t size_incre);
         void set_node_t(int node_size);
-        void insert(pair<string,int>& item,HistoryNode node);
-        HistoryNode retrieve(pair<string,int> item);
+        void insert(pair<string,int>& item,HistoryNode* node);
+        HistoryNode* retrieve(pair<string,int>* item);
 };
 
 Hash_Map::Hash_Map(int size) {
@@ -78,7 +78,7 @@ uint32_t Hash_Map::hash_func(pair<string,int> item) {
 }
 */
 
-void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
+void Hash_Map::insert(pair<string,int>& item,HistoryNode* node) {
     size_t val = hash<string>{}(item.first);
     int key = (val + item.second) % size;
 
@@ -89,8 +89,8 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
         if (cur_size < max_size) {
             History_table[key].push_back(make_pair(item,node));
             cur_size += node_size;
-            hash_lock[key].unlock();
         }
+        hash_lock[key].unlock();
         return;
     }
 
@@ -116,19 +116,19 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode node) {
     return;
 }
 
-HistoryNode Hash_Map::retrieve(pair<string,int> item) {
-    size_t val = hash<string>{}(item.first);
-    int key = (val + item.second) % size;
+HistoryNode* Hash_Map::retrieve(pair<string,int>* item) {
+    size_t val = hash<string>{}(item->first);
+    int key = (val + item->second) % size;
 
     for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {
-        string permutation_src = item.first;
+        string permutation_src = item->first;
         string permutation_dest = iter->first.first;
-        int ending_src = item.second;
+        int ending_src = item->second;
         int ending_dest = iter->first.second;
         if (permutation_src == permutation_dest && ending_src == ending_dest) {
             return iter->second;
         }
     }
     
-    return HistoryNode();
+    return NULL;
 }

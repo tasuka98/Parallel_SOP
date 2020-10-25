@@ -7,7 +7,7 @@ CXXFLAG = -Wall $(CXX_VERSION)
 SRC = ./src
 LIB = ./lib
 
-OBJS = main.o solver.o hungarian.o history.o
+OBJS = main.o solver.o hungarian.o history.o memory.o
 PROG = sop_solver
 
 $(PROG): $(OBJS)
@@ -23,6 +23,9 @@ hungarian.o: $(LIB)/hungarian.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
 history.o: $(LIB)/history.cpp
+	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
+
+memory.o: $(LIB)/memory.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
 clean:

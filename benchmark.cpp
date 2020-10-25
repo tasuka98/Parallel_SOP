@@ -3,6 +3,7 @@
 #include <chrono>
 #include <string>
 #include <stdio.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -15,9 +16,12 @@ int main() {
     for (int i = 0; i < 7; i++) {
             cout << TSPLIB[i] << " ";
             string command_first = "./sop_solver ./tsplib/" + TSPLIB[i];
+            string command_second = "./sop_solver_full ./tsplib/" + TSPLIB[i];
             cout << endl;
             system(command_first.c_str());
+            system(command_second.c_str());
             cout << endl;
+            usleep(2000000);
     }
 
     cout << "------------------------SOPLIB---------------------------" << endl;
@@ -30,9 +34,12 @@ int main() {
     for (int i = 0; i < 19; i++) {
         cout << SOPLIB[i] << " ";
         string command_first = "./sop_solver ./soplib/" + SOPLIB[i];
+        string command_second = "./sop_solver_full ./soplib/" + SOPLIB[i];
         cout << endl;
         system(command_first.c_str());
+        system(command_second.c_str());
         cout << endl;
+        usleep(2000000);
     }
 
     fclose (stdout);
