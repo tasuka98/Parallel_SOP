@@ -1,3 +1,5 @@
 .idea
 *.o
+lib_experiment/*
+./valgrind-out.txt
 

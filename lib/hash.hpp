@@ -23,9 +23,12 @@ class Hash_Map {
         size_t get_max_size();
         size_t get_cur_size();
         uint32_t hash_func(pair<string,int> item);
+        void lock_table(int& key);
+        void unlock_table(int& key);
         void increase_size(size_t size_incre);
         void set_node_t(int node_size);
         void insert(pair<string,int>& item,HistoryNode* node);
+        //HistoryNode* retrieve(pair<string,int>* item,int* bucket_num);
         HistoryNode* retrieve(pair<string,int>* item);
 };
 
@@ -37,7 +40,7 @@ Hash_Map::Hash_Map(int size) {
 		exit(1);
 	}
 
-    max_size = (double)info.freeram*0.8-size*sizeof(mutex);
+    max_size = (double)info.freeram*0.85-size*sizeof(mutex);
     cur_size = 0;
     hash_lock = vector<mutex>(size);
     History_table.resize(size);
@@ -77,7 +80,7 @@ uint32_t Hash_Map::hash_func(pair<string,int> item) {
     return hash;
 }
 */
-
+    
 void Hash_Map::insert(pair<string,int>& item,HistoryNode* node) {
     size_t val = hash<string>{}(item.first);
     int key = (val + item.second) % size;
@@ -115,6 +118,34 @@ void Hash_Map::insert(pair<string,int>& item,HistoryNode* node) {
     hash_lock[key].unlock();
     return;
 }
+
+void Hash_Map::lock_table(int& key) {
+    hash_lock[key].lock();
+}
+
+void Hash_Map::unlock_table(int& key) {
+    hash_lock[key].unlock();
+}
+
+/*
+HistoryNode* Hash_Map::retrieve(pair<string,int>* item, int* bucket_num) {
+    size_t val = hash<string>{}(item->first);
+    int key = (val + item->second) % size;
+    *bucket_num = key;
+
+    for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {
+        string permutation_src = item->first;
+        string permutation_dest = iter->first.first;
+        int ending_src = item->second;
+        int ending_dest = iter->first.second;
+        if (permutation_src == permutation_dest && ending_src == ending_dest) {
+            return iter->second;
+        }
+    }
+    
+    return NULL;
+}
+*/
 
 HistoryNode* Hash_Map::retrieve(pair<string,int>* item) {
     size_t val = hash<string>{}(item->first);
