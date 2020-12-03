@@ -16,20 +16,21 @@ class Hash_Map {
         size_t size = 0;
         size_t max_size = 0;
         size_t node_size = 0;
-        vector<list<pair<pair<string,int>,HistoryNode*>>> History_table;
+        vector<list<pair<pair<vector<bool>,int>,HistoryNode*>>> History_table;
     public:
+        atomic<long> num_of_waits;
         Hash_Map(int size);
         bool isEmpty();
         size_t get_max_size();
         size_t get_cur_size();
-        uint32_t hash_func(pair<string,int> item);
+        uint32_t hash_func(pair<vector<bool>,int> item);
         void lock_table(int& key);
         void unlock_table(int& key);
         void increase_size(size_t size_incre);
         void set_node_t(int node_size);
-        void insert(pair<string,int>& item,HistoryNode* node);
-        //HistoryNode* retrieve(pair<string,int>* item,int* bucket_num);
-        HistoryNode* retrieve(pair<string,int>* item);
+        void insert(pair<vector<bool>,int>& item,HistoryNode* node);
+        void average_size();
+        HistoryNode* retrieve(pair<vector<bool>,int>* item,int key);
 };
 
 Hash_Map::Hash_Map(int size) {
@@ -80,41 +81,29 @@ uint32_t Hash_Map::hash_func(pair<string,int> item) {
     return hash;
 }
 */
+
+void Hash_Map::average_size() {
+    long unsigned max = 0;
+    long unsigned sum = 0;
+    long unsigned item = 0;
+    for (unsigned i = 0; i < size; i++) {
+        if (History_table[i].size() > 0) item++;
+        if (History_table[i].size() > max) max = History_table[i].size();
+        sum +=  History_table[i].size();
+    }
+    cout << "Total non empty entry is " << item << endl;
+    cout << "Total history table size is " << sum << endl;
+    cout << "Maximum bracket size is " << max << endl;
+    cout << "Average bracket size is " << float(sum)/float(item) << endl;
+}
     
-void Hash_Map::insert(pair<string,int>& item,HistoryNode* node) {
-    size_t val = hash<string>{}(item.first);
+void Hash_Map::insert(pair<vector<bool>,int>& item,HistoryNode* node) {
+    size_t val = hash<vector<bool>>{}(item.first);
     int key = (val + item.second) % size;
 
     hash_lock[key].lock();
-    bool exist = false;
-
-    if (!History_table[key].size()) {
-        if (cur_size < max_size) {
-            History_table[key].push_back(make_pair(item,node));
-            cur_size += node_size;
-        }
-        hash_lock[key].unlock();
-        return;
-    }
-
-    for (auto iter = History_table[key].begin(); iter != History_table[key].end(); iter++) {
-        string permutation_src = item.first;
-        string permutation_dest = iter->first.first;
-        int ending_src = item.second;
-        int ending_dest = iter->first.second;
-        if (permutation_src == permutation_dest && ending_src == ending_dest) {
-            exist = true;
-            iter->second = node;
-            hash_lock[key].unlock();
-            return;
-        }
-    }
-
-    if (!exist && cur_size < max_size) {
-        History_table[key].push_back(make_pair(item,node));
-        cur_size += node_size;
-    }
-    
+    History_table[key].push_back(make_pair(item,node));
+    cur_size += node_size;
     hash_lock[key].unlock();
     return;
 }
@@ -147,19 +136,11 @@ HistoryNode* Hash_Map::retrieve(pair<string,int>* item, int* bucket_num) {
 }
 */
 
-HistoryNode* Hash_Map::retrieve(pair<string,int>* item) {
-    size_t val = hash<string>{}(item->first);
-    int key = (val + item->second) % size;
-
-    for (auto iter = begin(History_table[key]); iter != History_table[key].end(); iter++) {
-        string permutation_src = item->first;
-        string permutation_dest = iter->first.first;
-        int ending_src = item->second;
-        int ending_dest = iter->first.second;
-        if (permutation_src == permutation_dest && ending_src == ending_dest) {
+HistoryNode* Hash_Map::retrieve(pair<vector<bool>,int>* item,int key) {
+    for (auto iter = History_table[key].begin(); iter != History_table[key].end(); iter++) {
+        if (item->first == iter->first.first && item->second == iter->first.second) {
             return iter->second;
         }
     }
-    
     return NULL;
 }

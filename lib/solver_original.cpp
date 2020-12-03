@@ -23,7 +23,6 @@
 using namespace std;
 #define TABLE_SIZE 12582917
 #define BLOCK_SIZE 81920
-#define TIME_FRAME 0.3
 
 static Hash_Map history_table(TABLE_SIZE);
 //static int recently_added = 0;
@@ -38,13 +37,15 @@ static mutex thread_load_mutex;
 static mutex request_mutex;
 static condition_variable Idel;
 static vector<int> selected_orgin;
-static mutex Info_Lock;
+
 static mutex print_mutex;
+static mutex Info_Lock;
+vector<load_test> Info_arr;
 
 //Protected by lock
-atomic<int> selected_thread (-1);
-atomic<unsigned> active_thread (0);
-atomic<unsigned> idle_counter (0);
+atomic<int> num_of_steals (0);
+atomic<int> active_thread (0);
+atomic<int> idle_counter (0);
 atomic<bool> time_out (false);
 
 //Data Collection
@@ -58,7 +59,6 @@ static string enum_option;
 static string Assign_Opt;
 static string Steal_Opt;
 static string force_push;
-static int initial_gpool_size = 0;
 static int global_pool_size = 0;
 static int local_pool_size = 0;
 static int t_limit = 0;
@@ -81,8 +81,15 @@ void solver::assign_parameter(vector<string> setting) {
     //cout << global_pool_size << endl;
     local_pool_size = atoi(setting[3].c_str());
     //cout << local_pool_size << endl;
-    local_depth = atoi(setting[4].c_str());
+    //thread_total = atoi(setting[4].c_str());
+    //cout << thread_total << endl;
+    local_depth = atoi(setting[5].c_str());
     //cout << local_depth << endl;
+    Assign_Opt = setting[6];
+    //cout << Assign_Opt << endl;
+    Steal_Opt = setting[7];
+    //cout << Steal_Opt << endl;
+    force_push = setting[8];
     return;
 }
 
@@ -93,7 +100,7 @@ int solver::dynamic_hungarian(int src, int dest) {
     return hungarian_solver.get_matching_cost()/2;
 }
 
-bool solver::HistoryUtilization(pair<vector<bool>,int>* key,int* lowerbound,bool* found,int cost) {
+bool solver::HistoryUtilization(pair<vector<bool>,int>* key,int* lowerbound,bool* found) {
     size_t val = hash<vector<bool>>{}(key->first);
     int bucket_location = (val + key->second) % TABLE_SIZE;
     history_table.lock_table(bucket_location);
@@ -109,19 +116,19 @@ bool solver::HistoryUtilization(pair<vector<bool>,int>* key,int* lowerbound,bool
     int history_lb = history_node->lower_bound;
     *lowerbound = history_lb;
 
-    if (cost >= history_prefix) {
+    if (cur_cost >= history_prefix) {
         history_table.unlock_table(bucket_location);
         return false;
     }
 
-    int imp = history_prefix - cost;
+    int imp = history_prefix - cur_cost;
     
     if (imp <= history_lb - best_cost) {
         history_table.unlock_table(bucket_location);
         return false;
     }
 
-    history_node->prefix_cost = cost;
+    history_node->prefix_cost = cur_cost;
     history_node->lower_bound = history_lb - imp;
     *lowerbound = history_node->lower_bound;
 
@@ -135,6 +142,10 @@ bool GPQ_sort(const solver& src, const solver& dest) {
 }
 
 bool local_sort(const solver& src, const solver& dest) {
+    //Maximum Load Frist
+    //return src.get_load_estimation() < dest.get_load_estimation();
+    
+    //Lowest LB first
     return src.load_info > dest.load_info;
 }
 
@@ -151,12 +162,25 @@ bool nearest_sort(const node& src,const node& dest) {
 bool solver::Wlkload_Request(int i) {
     bool terminate = true;
     if (i == initial_depth && active_thread >= 1) {
+        notify_finished();
         thread_load_mutex.lock();
         thread_load[thread_id].out_of_work = true;
         thread_load_mutex.unlock();
         auto current_local_pool = local_pool;
         auto current_mem_block = history_block;
         unsigned mem_counter = counter;
+
+        /////////////////////////////
+        /*
+        if (Just_Stole == true) {
+            Just_Stole = false;
+            Info_Lock.lock();
+            Info_arr.push_back(Stolen_load_info);
+            Stolen_load_info.Clear_info();
+            Info_Lock.unlock();
+        }
+        */
+        ////////////////////////////
 
         if (!local_pool->empty()) {
             *this = local_pool->back();
@@ -197,53 +221,20 @@ bool solver::Wlkload_Request(int i) {
             }
             GPQ_lock.unlock();
 
-            if (active_thread > 1 && terminate) {
-                active_thread--;
+            if (active_thread > 0 && terminate) {
                 std::unique_lock<std::mutex> idel_lck(Split_lock);
                 auto start_time_wait = std::chrono::system_clock::now();
                 GPQ_lock.lock();
-                ////////////////
-                //print_mutex.lock();
-                //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " started to wait idle count = " << idle_counter << " and active threads are " << active_thread << endl;
-                //print_mutex.unlock();
-                ///////////////
-                int min = INT_MAX;
-                int id = -1;
-                
-                //Select the thread with the lowest LB;
-                if (selected_thread == -1) {
-                    thread_load_mutex.lock();
-                    for (int k = 0; k < thread_total; k++) {
-                        if (thread_load[k].load < min && thread_load[k].load > 0) {
-                            min = thread_load[k].load;
-                            id = k;
-                        }
-                    }
-                    selected_thread = id;
-                    thread_load_mutex.unlock();
-                }
-                //Else, we know a selection exists;
-                while (GPQ.empty() && active_thread > 1) {
-                    if (idle_counter < (unsigned)thread_total) idle_counter++;
+                while (GPQ.empty() && active_thread > 0) {
+                    if (idle_counter < thread_total) idle_counter++;
                     GPQ_lock.unlock();
                     Idel.wait(idel_lck);
                     GPQ_lock.lock();
-                    idle_counter--;
                     steal_request[thread_id]++;
                 }
-                //Turn off thread selection if all of the threads are satisfied;
-                if (idle_counter == 0) selected_thread = -1;
                 auto end_time_wait = std::chrono::system_clock::now();
-                auto wait_duration = (float) std::chrono::duration<double>(end_time_wait - start_time_wait).count();
-                wait_time[thread_id] += wait_duration;
-                ////////////////
-                //print_mutex.lock();
-                //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " released and finished waiting in " << wait_duration << " with GPQ size = " << GPQ.size() << endl;
-                //print_mutex.unlock();
-                ///////////////
-
+                wait_time[thread_id] += (float) std::chrono::duration<double>(end_time_wait - start_time_wait).count();
                 if (!GPQ.empty()) {
-                    active_thread++;
                     GPQ.back().thread_id = thread_id;
                     *this = GPQ.back();
                     counter = mem_counter;
@@ -254,7 +245,6 @@ bool solver::Wlkload_Request(int i) {
                 }
                 GPQ_lock.unlock();
             }
-            else if (active_thread == 1) notify_finished();
         }
     }
     return terminate;
@@ -277,38 +267,30 @@ void solver::assign_workload(int taken_n, int lb) {
     target.history_block = NULL;
     target.counter = 0;
     target.load_info = lb;
+    target.force_cnt = 0;
     local_pool->push_back(target);
     return;
 }
 
 bool solver::push_to_global_pool() {
-    unsigned size = local_pool->size() / 2;
-    bool insertion = false;
-
-    while (size > 0) {
-        if (local_pool->back().load_info >= best_cost) {
-            local_pool->pop_back();
-        }
-        else {
-            GPQ_lock.lock();
-            GPQ.push_back(local_pool->back());
-            GPQ_lock.unlock();
-            local_pool->pop_back();
-            insertion = true;
-        }
-        size--;
+    if (local_pool->back().load_info >= best_cost) {
+        local_pool->pop_back();
+        return false;
+    }
+    else {
+        GPQ_lock.lock();
+        GPQ.push_back(local_pool->back());
+        GPQ_lock.unlock();
+        local_pool->pop_back();
+        return true;
     }
     
-    return insertion;
+    return false;
 }
 
 void solver::notify_finished() {
-    if (active_thread == 1) {
-        ////////////////
-        //print_mutex.lock();
-        //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " called release all threads!" << endl;
-        //print_mutex.unlock();
-        ////////////////
+    active_thread--;
+    if (active_thread == 0) {
         std::unique_lock<std::mutex> idel_lck(Split_lock);
         idel_lck.unlock();
         Idel.notify_all();
@@ -344,209 +326,87 @@ void solver::push_to_historytable(pair<vector<bool>,int> key,int lower_bound,int
     return;
 }
 
-bool solver::Split_local_pool() {
-    vector<int> ready_list;
-    //Split until we have more than 1 node.
-    while (local_pool->size() <= 1) {
-        if (local_pool->empty()) return false;
-
-        auto target = local_pool->back();
-        local_pool->pop_back();
-
-        //Create key for history table
-        vector<bool> bit_vector(node_count, false);
-        for (auto node : target.cur_solution) {
-            bit_vector[node] = true;
-        }
-        int last_element = target.cur_solution.back();
-        auto key = make_pair(bit_vector,last_element);
-
-        //Get all children
-        for (int i = node_count-1; i >= 0; i--) {
-            if (!target.depCnt[i] && !target.taken_arr[i]) ready_list.push_back(i);
-        }
-
-        if (!ready_list.empty()) {
-            for (auto node : ready_list) {
-                int taken_node = node;
-                int cur_node = target.cur_solution.back();
-                target.taken_arr[taken_node] = 1;
-                for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]--;
-                target.cur_cost += cost_graph[cur_node][taken_node].weight;
-                target.cur_solution.push_back(taken_node);
-                if (cur_cost >= best_cost) {
-                    key.first[taken_node] = false;
-                    key.second = cur_node;
-                    target.cur_solution.pop_back();
-                    target.cur_cost -= cost_graph[cur_node][taken_node].weight;
-                    target.taken_arr[taken_node] = 0;
-                    for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]++;
-                    target.hungarian_solver.undue_row(cur_node, taken_node);
-                    target.hungarian_solver.undue_column(taken_node, cur_node);
-                    continue;
-                }
-                if (target.cur_solution.size() == (size_t)node_count) {
-                    if (target.cur_cost < best_cost) {
-                        Sol_lock.lock();
-                        best_solution = cur_solution;
-                        best_cost = cur_cost;
-                        Sol_lock.unlock();
-                    }
-                    key.first[taken_node] = false;
-                    key.second = cur_node;
-                    target.cur_solution.pop_back();
-                    target.cur_cost -= cost_graph[cur_node][taken_node].weight;
-                    target.taken_arr[taken_node] = 0;
-                    for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]++;
-                    target.hungarian_solver.undue_row(cur_node, taken_node);
-                    target.hungarian_solver.undue_column(taken_node, cur_node);
-                    continue;
-                }
-                else {
-                    key.first[taken_node] = true;
-                    key.second = taken_node;
-                    int temp_lb = -1;
-                    bool taken = false;
-                    bool decision = HistoryUtilization(&key,&temp_lb,&taken,target.cur_cost);
-                    if (!taken) {
-                        target.hungarian_solver.fix_row(cur_node, taken_node);
-                        target.hungarian_solver.fix_column(taken_node, cur_node);
-                        target.hungarian_solver.solve_dynamic();
-                        temp_lb = target.hungarian_solver.get_matching_cost()/2;
-                        HistoryNode* node = retrieve_his_node();
-                        node->prefix_cost = target.cur_cost;
-                        node->lower_bound = temp_lb;
-                        history_table.insert(key,node);
-                    }
-                    else if (taken && !decision) {
-                        key.first[taken_node] = false;
-                        key.second = cur_node;
-                        target.cur_solution.pop_back();
-                        target.cur_cost -= cost_graph[cur_node][taken_node].weight;
-                        target.taken_arr[taken_node] = 0;
-                        for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]++;
-                        target.hungarian_solver.undue_row(cur_node, taken_node);
-                        target.hungarian_solver.undue_column(taken_node, cur_node);
-                        continue;
-                    }
-                    if (temp_lb >= best_cost) {
-                        key.first[taken_node] = false;
-                        key.second = cur_node;
-                        target.cur_solution.pop_back();
-                        target.cur_cost -= cost_graph[cur_node][taken_node].weight;
-                        target.taken_arr[taken_node] = 0;
-                        for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]++;
-                        target.hungarian_solver.undue_row(cur_node, taken_node);
-                        target.hungarian_solver.undue_column(taken_node, cur_node);
-                        continue;
-                    }
-                    target.load_info = temp_lb;
-                }
-                local_pool->push_back(target);
-                key.first[taken_node] = false;
-                key.second = cur_node;
-                target.taken_arr[taken_node] = 0;
-                for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]++;
-                target.cur_cost -= cost_graph[cur_node][taken_node].weight;
-                target.cur_solution.pop_back();
-                target.hungarian_solver.undue_row(cur_node, taken_node);
-                target.hungarian_solver.undue_column(taken_node, cur_node);
-            }
-        }
-        else return false;
-        ready_list.clear();
-    }
-
-    sort(local_pool->begin(),local_pool->end(),local_sort);
-    return true;
-}
-
-void solver::Direct_Workload() {
-    int min = INT_MAX;
-    int id = -1;
-    //Direct workload to new thread;
-    thread_load_mutex.lock();
-    for (int k = 0; k < thread_total; k++) {
-        if (thread_load[k].load < min && thread_load[k].load > 0 && thread_load[k].out_of_work == false) {
-            min = thread_load[k].load;
-            id = k;
-        }
-    }
-    selected_thread = id;
-    thread_load_mutex.unlock();
-    return;
-}
-
 void solver::Check_And_Distribute_Wlkload() {
     if (stolen) {
         auto time_frame_end = std::chrono::system_clock::now();
-        if (std::chrono::duration<double>(time_frame_end - time_frame_start).count() > TIME_FRAME) {
+        if (std::chrono::duration<double>(time_frame_end - time_frame_start).count() > 1) {
             stolen = false;
             thread_load_mutex.lock();
             thread_load[thread_id].out_of_work = false;
             thread_load_mutex.unlock();
         }
+        else return;
     }
 
-    bool insert = false;
-    bool push_to_global = false;
-
-    if (thread_id == selected_thread && idle_counter > 0) {
-        if (!local_pool->empty()) {
-            // Make sure we have at least one children in the ready list before splitting.
-            unsigned release_size = 0;
-            if (local_pool->size() <= 1) {
-                if (Split_local_pool()) insert = true;
-                else insert = false;
+    if (idle_counter > 0 && !local_pool->empty()) {
+        asssign_mutex.lock();
+        if (idle_counter > 0 && !local_pool->empty()) {
+            // Make sure we have at least two children in the ready list before splitting.
+            bool push_to_global = false;
+            bool steal = false;
+            int min = INT_MAX;
+            int id = -1;
+            
+            thread_load_mutex.lock();
+            for (int k = 0; k < thread_total; k++) {
+                if (thread_load[k].load < min && thread_load[k].load > 0) {
+                    min = thread_load[k].load;
+                    id = k;
+                }
             }
-            else insert = true;
+            if (id == thread_id) steal = true;
+            thread_load_mutex.unlock();
 
-            if (insert) {
-                release_size = local_pool->size() / 2;
+            if (Assign_Opt == "SINGLE" && steal) {
                 if (push_to_global_pool()) push_to_global = true;
+                else push_to_global = false;
+
+                thread_load_mutex.lock();
+                if (!local_pool->empty()) thread_load[thread_id].load = local_pool->back().load_info;
+                else thread_load[thread_id].load = INT_MAX;
+                thread_load_mutex.unlock();
+            }
+            else if (Assign_Opt == "FULL" && steal) {
+                int p_count = 0;
+                while (local_pool->size() > 1 && p_count < global_pool_size) {
+                    if (push_to_global_pool()) p_count++;
+                }
+                thread_load_mutex.lock();
+                if (!local_pool->empty()) thread_load[thread_id].load = local_pool->back().load_info;
+                else thread_load[thread_id].load = INT_MAX;
+                thread_load_mutex.unlock();
+                if (p_count > 0) push_to_global = true;
                 else push_to_global = false;
             }
 
-            thread_load_mutex.lock();
-            if (!local_pool->empty()) thread_load[thread_id].load = local_pool->back().load_info;
-            else thread_load[thread_id].load = INT_MAX;
-            thread_load_mutex.unlock();
-
             if (push_to_global) {
-                ///////////////
-                //print_mutex.lock();
-                //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " just assigned and released potentially " << release_size << " threads\n";
-                //print_mutex.unlock();
-                //////////////
-
-                if (release_size > idle_counter) {
+                if (Assign_Opt == "SINGLE") {
+                    idle_counter--;
+                    //steal_request[thread_id]++;
                     std::unique_lock<std::mutex> idel_lck(Split_lock);
                     idel_lck.unlock();
-                    Idel.notify_all();
+                    Idel.notify_one();
+
+                    //Start time frame so threads won't be stolen again;
+                    stolen = true;
+                    time_frame_start = std::chrono::system_clock::now();
+                    thread_load_mutex.lock();
+                    thread_load[thread_id].out_of_work = true;
+                    thread_load_mutex.unlock();
                 }
-                else {
-                    for (unsigned i = 0; i < release_size; i++) {
-                        if (idle_counter > 0) {
-                            std::unique_lock<std::mutex> idel_lck(Split_lock);
-                            idel_lck.unlock();
-                            Idel.notify_one();
-                        }
-                        else break;
+                else if (Assign_Opt == "FULL") {
+                    for (unsigned i = 0; i < GPQ.size(); i++) {
+                        idle_counter--;
+                        std::unique_lock<std::mutex> idel_lck(Split_lock);
+                        idel_lck.unlock();
+                        Idel.notify_one();
+                        if (idle_counter == 0) break;
                     }
-                    Direct_Workload();
                 }
-                //Start time frame so this thread won't be appointed victim again for a certain period of time.
-                stolen = true;
-                time_frame_start = std::chrono::system_clock::now();
-                thread_load_mutex.lock();
-                thread_load[thread_id].out_of_work = true;
-                thread_load_mutex.unlock();
             }
         }
-
-        if (!push_to_global) Direct_Workload();
+        asssign_mutex.unlock();
     }
-
     return;
 }
 
@@ -585,7 +445,6 @@ void solver::enumerate(int i) {
             cur_cost += cost_graph[src][dest.n].weight;
             int temp_lb = -1;
             bool taken = false;
-            Check_And_Distribute_Wlkload();
             
             //Backtrack
             if (cur_cost >= best_cost) {
@@ -600,6 +459,10 @@ void solver::enumerate(int i) {
                     Sol_lock.lock();
                     best_solution = cur_solution;
                     best_cost = cur_cost;
+                    //cout << "best cost is " << best_cost << " and found in thread " << thread_id << endl;
+                    /////////////////////////////////
+                    //if (Just_Stole) Stolen_load_info.Num_of_Sol_Updates++;
+                    /////////////////////////////////
                     Sol_lock.unlock();
                 }
                 full_solution = true;
@@ -614,10 +477,21 @@ void solver::enumerate(int i) {
             else {
                 key.first[dest.n] = true;
                 key.second = dest.n;
-                bool decision = HistoryUtilization(&key,&temp_lb,&taken,cur_cost);
+                //auto start_time_node = chrono::high_resolution_clock::now();
+                bool decision = HistoryUtilization(&key,&temp_lb,&taken);
+                //auto end_time_node = chrono::high_resolution_clock::now();
+                //node_time[thread_id] += (float) std::chrono::duration<double>(end_time_node - start_time_node).count();
+                //explored_nodes[thread_id]++;
                 if (!taken) {
+                    //auto start_time_LB = chrono::high_resolution_clock::now();
                     temp_lb = dynamic_hungarian(src,dest.n);
+                    //auto end_time_LB = chrono::high_resolution_clock::now();
+                    //LB_time[thread_id] += (float) std::chrono::duration<double>(end_time_LB - start_time_LB).count();
+                    //explored_LB[thread_id]++;
+                    //auto start_time_node = chrono::high_resolution_clock::now();
                     push_to_historytable(key,temp_lb,i);
+                    //auto end_time_node = chrono::high_resolution_clock::now();
+                    //node_time[thread_id] += (float) std::chrono::duration<double>(end_time_node - start_time_node).count();
                     hungarian_solver.undue_row(src,dest.n);
                     hungarian_solver.undue_column(dest.n,src);
                 }
@@ -651,6 +525,9 @@ void solver::enumerate(int i) {
         if (enum_option == "DH") sort(ready_list.begin(),ready_list.end(),bound_sort);
         else if (enum_option == "NN") sort(ready_list.begin(),ready_list.end(),nearest_sort);
     }
+
+    Check_And_Distribute_Wlkload();
+
     //deque<node> pushed_to_local;
 
     while(!ready_list.empty()) {
@@ -660,32 +537,30 @@ void solver::enumerate(int i) {
         ready_list.pop_back();
         enumerated_bounds[thread_id]++;
 
-        if (local_pool->size() < (size_t)local_pool_size && !ready_list.empty()) {
-            if (i <= local_depth) {
-                while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
-                    assign_workload(ready_list.back().n,ready_list.back().lb);
-                    //pushed_to_local.push_back(ready_list.back());
-                    ready_list.pop_back();
-                }
+        ////////////////////////////////////////////////
+        //if (Just_Stole) Stolen_load_info.Stolen_Load++;
+        ///////////////////////////////////////////////
+
+        if (local_pool->size() < (size_t)local_pool_size && !ready_list.empty() && i <= (float(local_depth) / float(100) * node_count)) {
+
+            while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
+                assign_workload(ready_list.back().n,ready_list.back().lb);
+                //pushed_to_local.push_back(ready_list.back());
+                ready_list.pop_back();
             }
-            else if (idle_counter > 0 && local_pool->size() <= 1) {
-                while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
-                    assign_workload(ready_list.back().n,ready_list.back().lb);
-                    //pushed_to_local.push_back(ready_list.back());
-                    ready_list.pop_back();
-                }
+
+            if (local_pool->empty()) {
+                thread_load_mutex.lock();
+                thread_load[thread_id].load = INT_MAX;
+                thread_load_mutex.unlock();
             }
-            if (!local_pool->empty()) {
+            else {
                 sort(local_pool->begin(),local_pool->end(),local_sort);
                 thread_load_mutex.lock();
                 thread_load[thread_id].load = local_pool->back().load_info;
                 thread_load_mutex.unlock();
             }
-            else {
-                thread_load_mutex.lock();
-                thread_load[thread_id].load = INT_MAX;
-                thread_load_mutex.unlock();
-            }
+
         }
 
         if (!cur_solution.empty()) {
@@ -701,8 +576,7 @@ void solver::enumerate(int i) {
         taken_arr[taken_node] = 1;
         full_solution = false;
         suffix_cost = 0;
-        Check_And_Distribute_Wlkload();
-        
+
         enumerate(next_level);
 
         for (int vertex : dependent_graph[taken_node]) depCnt[vertex]++;
@@ -729,6 +603,7 @@ void solver::enumerate(int i) {
 
     if (!Wlkload_Request(next_level-1)) {
         next_level = initial_depth + 1;
+        active_thread++;
     }
     else break;
     }
@@ -773,8 +648,8 @@ void solver::solve_parallel(int thread_num, int pool_size) {
     }
 
     for (int i = thread_num - 1; i >= 0; i--) ready_thread.push_back(i);
-
     //While GPQ is not empty do split operation or assign threads with new node.
+
     while (!GPQ.empty()) {
         while (GPQ.size() < (size_t)pool_size) {
             auto target = GPQ.front();
@@ -787,30 +662,33 @@ void solver::solve_parallel(int thread_num, int pool_size) {
 
             if (!ready_list.empty()) {
                 for (auto node : ready_list) {
-                    int vertex = node.n;
-                    //Push split node back into GPQ
-                    int taken_node = vertex;
-                    int cur_node = target.cur_solution.back();
-                    target.taken_arr[taken_node] = 1;
-                    for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]--;
-                    target.cur_cost += cost_graph[cur_node][taken_node].weight;
-                    target.cur_solution.push_back(taken_node);
-                    if (cur_solution.size() == (size_t)node_count && cur_cost < best_cost) {
-                        best_solution = cur_solution;
-                        best_cost = cur_cost;
-                    }
-                    target.hungarian_solver.fix_row(cur_node, taken_node);
-                    target.hungarian_solver.fix_column(taken_node, cur_node);
-                    target.hungarian_solver.solve_dynamic();
-                    target.load_info = target.hungarian_solver.get_matching_cost()/2;
-                    GPQ.push_back(target);
+                int vertex = node.n;
+                //Push split node back into GPQ
+                    if (!target.depCnt[vertex] && !target.taken_arr[vertex]) {
+                        int taken_node = vertex;
+                        int cur_node = target.cur_solution.back();
+                        target.taken_arr[taken_node] = 1;
+                        for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]--;
+                        target.cur_cost += cost_graph[cur_node][taken_node].weight;
+                        target.cur_solution.push_back(taken_node);
+                        if (cur_solution.size() == (size_t)node_count && cur_cost < best_cost) {
+                            best_solution = cur_solution;
+                            best_cost = cur_cost;
+                        }
+                        target.hungarian_solver.fix_row(cur_node, taken_node);
+                        target.hungarian_solver.fix_column(taken_node, cur_node);
+                        target.hungarian_solver.solve_dynamic();
+                        target.load_info = target.hungarian_solver.get_matching_cost()/2;
+                        
+                        GPQ.push_back(target);
 
-                    target.taken_arr[taken_node] = 0;
-                    for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]++;
-                    target.cur_cost -= cost_graph[cur_node][taken_node].weight;
-                    target.cur_solution.pop_back();
-                    target.hungarian_solver.undue_row(cur_node, taken_node);
-                    target.hungarian_solver.undue_column(taken_node, cur_node);
+                        target.taken_arr[taken_node] = 0;
+                        for (int vertex : dependent_graph[taken_node]) target.depCnt[vertex]++;
+                        target.cur_cost -= cost_graph[cur_node][taken_node].weight;
+                        target.cur_solution.pop_back();
+                        target.hungarian_solver.undue_row(cur_node, taken_node);
+                        target.hungarian_solver.undue_column(taken_node, cur_node);
+                    }
                 }
             }
             else GPQ.push_back(target);
@@ -818,9 +696,6 @@ void solver::solve_parallel(int thread_num, int pool_size) {
         sort(GPQ.begin(),GPQ.end(),GPQ_sort);
 
         int thread_cnt = 0;
-
-        cout << "Initial GPQ size is " << GPQ.size() << endl;
-        initial_gpool_size = GPQ.size();
 
         //Assign GPQ subproblem into solver;
         while (thread_cnt < thread_num) {
@@ -865,10 +740,6 @@ void solver::solve_parallel(int thread_num, int pool_size) {
 }
 
 void solver::solve(string filename,int thread_num) {
-    if (thread_num == -1 || thread_num == 0) {
-        cerr << "Incorrect thread number input" << endl;
-        exit(-1);
-    }
     thread_total = thread_num;
     retrieve_input(filename);
     //Remove redundant edges in the cost graph
@@ -907,13 +778,6 @@ void solver::solve(string filename,int thread_num) {
             depCnt[dependent_graph[i][k]]++;
         }
     }
-
-    float average_depCnt = 0;
-    for (int i = 1; i < node_count - 1; i++) {
-        average_depCnt += depCnt[i];
-    }
-    average_depCnt = average_depCnt / (node_count - 2);
-    cout << "Average dependance count is " << average_depCnt << endl;
     //cout << "best solution found using initial heuristic is " << best_cost << endl;
     /*
     cout << "the NN solution contains ";
@@ -933,6 +797,7 @@ void solver::solve(string filename,int thread_num) {
     explored_LB = new int [thread_total];
     LB_time = new float [thread_total]; 
     logic_time = new float [thread_total];
+    
     node_time = new float [thread_total];
     history_wait = new float [thread_total];
     */
@@ -947,7 +812,9 @@ void solver::solve(string filename,int thread_num) {
     memset(wait_time,0,thread_total * sizeof(float));
     memset(node_time,0,thread_total * sizeof(float));
     memset(history_wait,0,thread_total * sizeof(float));
-    */
+
+    */    
+
     auto start_time = chrono::high_resolution_clock::now();
     solve_parallel(thread_total,global_pool_size);
     auto end_time = chrono::high_resolution_clock::now();
@@ -956,6 +823,7 @@ void solver::solve(string filename,int thread_num) {
     cout << "------------------------" << thread_total << " thread" << "------------------------------" << endl;
     cout << enum_option << ": " << best_cost << "," << setprecision(4) << total_time / (float)(1000000) << endl;
 
+    
     long int sum = 0;
     int thread_i = -1;
     float max_wait = 0;
@@ -978,19 +846,14 @@ void solver::solve(string filename,int thread_num) {
     cout << "maximum wait time = " << max_wait << " happening in thread " << thread_i << " with total steal request = " << steal_request[thread_i-1] << endl;
 
     /*
-    cout << "......................Global pool node info.............." << endl;
-    cout << "Total nodes in the global pool are " << Info_arr.size() << endl;
-    for (auto info : Info_arr) {
-        info.Display_info();
-    }
-    */
-    
-
-    /*
+    cout << "......................Work Donation......................" << endl;
+    cout << "maximum wait time = " << max_wait << endl;
+    cout << "Total number of steals are " << num_of_steals << endl;
     cout << "......................History Table......................" << endl;
     history_table.average_size();
     cout << "Total number of waits for the history table is " << history_table.num_of_waits << endl;
     cout << "...........................Work load info..........................." << endl;
+
     unsigned maximum = 0;
     unsigned minimum = INT_MAX;
     unsigned total_size = 0;
@@ -1023,10 +886,6 @@ void solver::retrieve_input(string filename) {
     ifstream inFile;
     string line;
     inFile.open(filename);
-    if (inFile.fail()) {
-        cerr << "Error: input file " << filename << " -> " << strerror(errno) << endl;
-        exit(-1);
-    }
 
     // Read input files and store it inside an array.
     vector<vector<int>> file_matrix;

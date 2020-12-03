@@ -7,16 +7,16 @@ CXXFLAG = -Wall $(CXX_VERSION)
 SRC = ./src
 LIB = ./lib
 
-OBJS = main.o solver.o hungarian.o history.o memory.o
+OBJS = main.o solver.o hungarian.o history.o load_test.o
 PROG = sop_solver
 
 $(PROG): $(OBJS)
-	$(CC) $(CXXFLAG) $(OPTIMIZATION_LINK) $(LINK) $(PROG) $^
+	$(CC) $(CXXFLAG) $(OPTIMIZATION_LINK) $(LINK) $(PROG) $^ -lgmp -lgmpxx
 
 main.o: $(SRC)/main.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
-solver.o: $(LIB)/solver.cpp $(LIB)/hash.hpp
+solver.o: $(LIB)/solver.cpp $(LIB)/hash.hpp 
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
 hungarian.o: $(LIB)/hungarian.cpp
@@ -25,7 +25,7 @@ hungarian.o: $(LIB)/hungarian.cpp
 history.o: $(LIB)/history.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
-memory.o: $(LIB)/memory.cpp
+load_test.o: $(LIB)/load_test.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
 
 clean:

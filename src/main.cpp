@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <fstream>
 
-
 using namespace std;
 
 int main(int argc, char*argv[]) {
@@ -30,12 +29,19 @@ int main(int argc, char*argv[]) {
     }
     infile.close();
 
-    if (argc < 2) {
+    if (argc < 2 || argc > 3) {
         cout << "Incorrect format.....\n";
         cout << "<Instant Name>\n";
         exit(-1);
     }
-    s.assign_parameter(setting);
-    s.solve(argv[1]);
+    else if (argc == 2) {
+        s.assign_parameter(setting);
+        s.solve(argv[1],-1);
+    }
+    else if (argc == 3) {
+        s.assign_parameter(setting);
+        s.solve(argv[1],atoi(argv[2]));
+    }
+    
     return 0;
 }

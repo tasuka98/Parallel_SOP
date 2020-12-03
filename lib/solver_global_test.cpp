@@ -23,7 +23,6 @@
 using namespace std;
 #define TABLE_SIZE 12582917
 #define BLOCK_SIZE 81920
-#define TIME_FRAME 0.3
 
 static Hash_Map history_table(TABLE_SIZE);
 //static int recently_added = 0;
@@ -38,19 +37,23 @@ static mutex thread_load_mutex;
 static mutex request_mutex;
 static condition_variable Idel;
 static vector<int> selected_orgin;
-static mutex Info_Lock;
+
 static mutex print_mutex;
+static mutex Info_Lock;
+vector<load_test> Info_arr;
 
 //Protected by lock
-atomic<int> selected_thread (-1);
-atomic<unsigned> active_thread (0);
-atomic<unsigned> idle_counter (0);
+atomic<int> num_of_steals (0);
+atomic<int> active_thread (0);
+atomic<int> global_depletion (0);
+atomic<int> idle_counter (0);
 atomic<bool> time_out (false);
 
 //Data Collection
 load_stats* thread_load;
 int* enumerated_bounds;
 int* steal_request;
+int* donate_cnt;
 float* wait_time;
 
 //Config variable (Reading Only)
@@ -67,6 +70,7 @@ static int local_depth = 0;
 
 //Shared resources
 std::chrono::time_point<std::chrono::system_clock> start_time_limit;
+std::chrono::time_point<std::chrono::system_clock> global_deplete_time;
 static vector<vector<int>> dependent_graph;
 static vector<vector<edge>> in_degree;
 static vector<vector<edge>> hung_graph;
@@ -81,8 +85,15 @@ void solver::assign_parameter(vector<string> setting) {
     //cout << global_pool_size << endl;
     local_pool_size = atoi(setting[3].c_str());
     //cout << local_pool_size << endl;
-    local_depth = atoi(setting[4].c_str());
+    //thread_total = atoi(setting[4].c_str());
+    //cout << thread_total << endl;
+    local_depth = atoi(setting[5].c_str());
     //cout << local_depth << endl;
+    Assign_Opt = setting[6];
+    //cout << Assign_Opt << endl;
+    Steal_Opt = setting[7];
+    //cout << Steal_Opt << endl;
+    force_push = setting[8];
     return;
 }
 
@@ -151,17 +162,22 @@ bool nearest_sort(const node& src,const node& dest) {
 bool solver::Wlkload_Request(int i) {
     bool terminate = true;
     if (i == initial_depth && active_thread >= 1) {
+        notify_finished();
         thread_load_mutex.lock();
         thread_load[thread_id].out_of_work = true;
         thread_load_mutex.unlock();
         auto current_local_pool = local_pool;
         auto current_mem_block = history_block;
+        auto current_load_info = Stolen_load_info;
         unsigned mem_counter = counter;
 
         if (!local_pool->empty()) {
             *this = local_pool->back();
             history_block = current_mem_block;
             counter = mem_counter;
+            ///////////////////////////
+            if (global_depletion < initial_gpool_size) Stolen_load_info = current_load_info;
+            //////////////////////////
             local_pool->pop_back();
 
             thread_load_mutex.lock();
@@ -173,15 +189,54 @@ bool solver::Wlkload_Request(int i) {
             terminate = false;
         }
         else {
+            /////////////////////////////
+            print_mutex.lock();
+            if (global_depletion < initial_gpool_size) {
+                global_depletion++;
+                if (global_depletion == initial_gpool_size) global_deplete_time = std::chrono::system_clock::now();
+                Info_Lock.lock();
+                Info_arr.push_back(Stolen_load_info);
+                Stolen_load_info.Clear_info();
+                Info_Lock.unlock();
+            }
+            print_mutex.unlock();
+            ////////////////////////////
+
             GPQ_lock.lock();
             int assigned = false;
             if (!GPQ.empty()) {
+                GPQ.front().thread_id = thread_id;
+                *this = GPQ.front();
+                GPQ.pop_front();
+                ////////////////////////////////
+                print_mutex.lock();
+                if (global_depletion < initial_gpool_size) {
+                    Stolen_load_info.Stolen_Level = cur_solution.size();
+                    Stolen_load_info.Stolen_Lb = load_info;
+                    Stolen_load_info.Stolen_Load = 0;
+                    Stolen_load_info.Num_of_Sol_Updates = 0;
+                }
+                print_mutex.unlock();
+                ////////////////////////////////
+                local_pool = current_local_pool;
+                history_block = current_mem_block;
+                counter = mem_counter;
+                terminate = false;
+                /*
                 while (!assigned) {
                     for (int k = GPQ.size() - 1; k >= 0; k--) {
                         int origin_node = GPQ[k].originate;
                         if (!count(selected_orgin.begin(),selected_orgin.end(),origin_node)) {
                             GPQ[k].thread_id = thread_id;
                             *this = GPQ[k];
+                            ////////////////////////////////
+                            if (global_depletion == false) {
+                                Stolen_load_info.Stolen_Level = cur_solution.size();
+                                Stolen_load_info.Stolen_Lb = load_info;
+                                Stolen_load_info.Stolen_Load = 0;
+                                Stolen_load_info.Num_of_Sol_Updates = 0;
+                            }
+                            ////////////////////////////////
                             local_pool = current_local_pool;
                             history_block = current_mem_block;
                             counter = mem_counter;
@@ -194,56 +249,24 @@ bool solver::Wlkload_Request(int i) {
                     }
                     if (!assigned) selected_orgin.clear();
                 }
+                */
             }
             GPQ_lock.unlock();
 
-            if (active_thread > 1 && terminate) {
-                active_thread--;
+            if (active_thread > 0 && terminate) {
                 std::unique_lock<std::mutex> idel_lck(Split_lock);
                 auto start_time_wait = std::chrono::system_clock::now();
                 GPQ_lock.lock();
-                ////////////////
-                //print_mutex.lock();
-                //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " started to wait idle count = " << idle_counter << " and active threads are " << active_thread << endl;
-                //print_mutex.unlock();
-                ///////////////
-                int min = INT_MAX;
-                int id = -1;
-                
-                //Select the thread with the lowest LB;
-                if (selected_thread == -1) {
-                    thread_load_mutex.lock();
-                    for (int k = 0; k < thread_total; k++) {
-                        if (thread_load[k].load < min && thread_load[k].load > 0) {
-                            min = thread_load[k].load;
-                            id = k;
-                        }
-                    }
-                    selected_thread = id;
-                    thread_load_mutex.unlock();
-                }
-                //Else, we know a selection exists;
-                while (GPQ.empty() && active_thread > 1) {
-                    if (idle_counter < (unsigned)thread_total) idle_counter++;
+                while (GPQ.empty() && active_thread > 0) {
+                    if (idle_counter < thread_total) idle_counter++;
                     GPQ_lock.unlock();
                     Idel.wait(idel_lck);
                     GPQ_lock.lock();
-                    idle_counter--;
                     steal_request[thread_id]++;
                 }
-                //Turn off thread selection if all of the threads are satisfied;
-                if (idle_counter == 0) selected_thread = -1;
                 auto end_time_wait = std::chrono::system_clock::now();
-                auto wait_duration = (float) std::chrono::duration<double>(end_time_wait - start_time_wait).count();
-                wait_time[thread_id] += wait_duration;
-                ////////////////
-                //print_mutex.lock();
-                //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " released and finished waiting in " << wait_duration << " with GPQ size = " << GPQ.size() << endl;
-                //print_mutex.unlock();
-                ///////////////
-
+                wait_time[thread_id] += (float) std::chrono::duration<double>(end_time_wait - start_time_wait).count();
                 if (!GPQ.empty()) {
-                    active_thread++;
                     GPQ.back().thread_id = thread_id;
                     *this = GPQ.back();
                     counter = mem_counter;
@@ -254,7 +277,6 @@ bool solver::Wlkload_Request(int i) {
                 }
                 GPQ_lock.unlock();
             }
-            else if (active_thread == 1) notify_finished();
         }
     }
     return terminate;
@@ -303,12 +325,8 @@ bool solver::push_to_global_pool() {
 }
 
 void solver::notify_finished() {
-    if (active_thread == 1) {
-        ////////////////
-        //print_mutex.lock();
-        //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " called release all threads!" << endl;
-        //print_mutex.unlock();
-        ////////////////
+    active_thread--;
+    if (active_thread == 0) {
         std::unique_lock<std::mutex> idel_lck(Split_lock);
         idel_lck.unlock();
         Idel.notify_all();
@@ -443,6 +461,7 @@ bool solver::Split_local_pool() {
                     target.load_info = temp_lb;
                 }
                 local_pool->push_back(target);
+
                 key.first[taken_node] = false;
                 key.second = cur_node;
                 target.taken_arr[taken_node] = 0;
@@ -457,96 +476,75 @@ bool solver::Split_local_pool() {
         ready_list.clear();
     }
 
-    sort(local_pool->begin(),local_pool->end(),local_sort);
     return true;
-}
-
-void solver::Direct_Workload() {
-    int min = INT_MAX;
-    int id = -1;
-    //Direct workload to new thread;
-    thread_load_mutex.lock();
-    for (int k = 0; k < thread_total; k++) {
-        if (thread_load[k].load < min && thread_load[k].load > 0 && thread_load[k].out_of_work == false) {
-            min = thread_load[k].load;
-            id = k;
-        }
-    }
-    selected_thread = id;
-    thread_load_mutex.unlock();
-    return;
 }
 
 void solver::Check_And_Distribute_Wlkload() {
     if (stolen) {
         auto time_frame_end = std::chrono::system_clock::now();
-        if (std::chrono::duration<double>(time_frame_end - time_frame_start).count() > TIME_FRAME) {
+        if (std::chrono::duration<double>(time_frame_end - time_frame_start).count() > 1) {
             stolen = false;
             thread_load_mutex.lock();
             thread_load[thread_id].out_of_work = false;
             thread_load_mutex.unlock();
         }
+        else return;
     }
 
-    bool insert = false;
-    bool push_to_global = false;
-
-    if (thread_id == selected_thread && idle_counter > 0) {
-        if (!local_pool->empty()) {
-            // Make sure we have at least one children in the ready list before splitting.
-            unsigned release_size = 0;
-            if (local_pool->size() <= 1) {
-                if (Split_local_pool()) insert = true;
-                else insert = false;
-            }
-            else insert = true;
-
-            if (insert) {
-                release_size = local_pool->size() / 2;
-                if (push_to_global_pool()) push_to_global = true;
-                else push_to_global = false;
-            }
-
+    if (idle_counter > 0 && !local_pool->empty()) {
+        asssign_mutex.lock();
+        if (idle_counter > 0 && !local_pool->empty()) {
+            // Make sure we have at least two children in the ready list before splitting.
+            bool push_to_global = false;
+            bool steal = false;
+            int min = INT_MAX;
+            int id = -1;
+            
             thread_load_mutex.lock();
-            if (!local_pool->empty()) thread_load[thread_id].load = local_pool->back().load_info;
-            else thread_load[thread_id].load = INT_MAX;
+            for (int k = 0; k < thread_total; k++) {
+                if (thread_load[k].load < min && thread_load[k].load > 0) {
+                    min = thread_load[k].load;
+                    id = k;
+                }
+            }
+            if (id == thread_id) steal = true;
             thread_load_mutex.unlock();
 
-            if (push_to_global) {
-                ///////////////
-                //print_mutex.lock();
-                //cout << std::chrono::duration<double>(std::chrono::system_clock::now() - start_time_limit).count() << ": " << "Thread " << thread_id << " just assigned and released potentially " << release_size << " threads\n";
-                //print_mutex.unlock();
-                //////////////
+            if (steal) {
+                bool insert = false;
+                if (local_pool->size() <= 1) {
+                    if (Split_local_pool()) insert = true;
+                }
+                else insert = true;
 
-                if (release_size > idle_counter) {
-                    std::unique_lock<std::mutex> idel_lck(Split_lock);
-                    idel_lck.unlock();
-                    Idel.notify_all();
+                if (insert) {
+                    if (push_to_global_pool()) push_to_global = true;
+                    else push_to_global = false;
                 }
-                else {
-                    for (unsigned i = 0; i < release_size; i++) {
-                        if (idle_counter > 0) {
-                            std::unique_lock<std::mutex> idel_lck(Split_lock);
-                            idel_lck.unlock();
-                            Idel.notify_one();
-                        }
-                        else break;
-                    }
-                    Direct_Workload();
-                }
-                //Start time frame so this thread won't be appointed victim again for a certain period of time.
+
+                thread_load_mutex.lock();
+                if (!local_pool->empty()) thread_load[thread_id].load = local_pool->back().load_info;
+                else thread_load[thread_id].load = INT_MAX;
+                thread_load_mutex.unlock();
+            }
+            if (push_to_global) {
+                //cout << "Wake up thread" << endl;
+                idle_counter--;
+                std::unique_lock<std::mutex> idel_lck(Split_lock);
+                idel_lck.unlock();
+                Idel.notify_one();
+
+                //Start time frame so this thread won't be appointed victim again.
                 stolen = true;
                 time_frame_start = std::chrono::system_clock::now();
+                donate_cnt[thread_id]++;
                 thread_load_mutex.lock();
                 thread_load[thread_id].out_of_work = true;
                 thread_load_mutex.unlock();
             }
         }
-
-        if (!push_to_global) Direct_Workload();
+        asssign_mutex.unlock();
     }
-
     return;
 }
 
@@ -585,7 +583,10 @@ void solver::enumerate(int i) {
             cur_cost += cost_graph[src][dest.n].weight;
             int temp_lb = -1;
             bool taken = false;
-            Check_And_Distribute_Wlkload();
+
+            ////////////////////////////////////////////////
+            if (global_depletion < initial_gpool_size) Stolen_load_info.Stolen_Load++;
+            ///////////////////////////////////////////////
             
             //Backtrack
             if (cur_cost >= best_cost) {
@@ -600,6 +601,9 @@ void solver::enumerate(int i) {
                     Sol_lock.lock();
                     best_solution = cur_solution;
                     best_cost = cur_cost;
+                    /////////////////////////////////
+                    if (global_depletion < initial_gpool_size) Stolen_load_info.Num_of_Sol_Updates++;
+                    /////////////////////////////////
                     Sol_lock.unlock();
                 }
                 full_solution = true;
@@ -614,10 +618,21 @@ void solver::enumerate(int i) {
             else {
                 key.first[dest.n] = true;
                 key.second = dest.n;
+                //auto start_time_node = chrono::high_resolution_clock::now();
                 bool decision = HistoryUtilization(&key,&temp_lb,&taken,cur_cost);
+                //auto end_time_node = chrono::high_resolution_clock::now();
+                //node_time[thread_id] += (float) std::chrono::duration<double>(end_time_node - start_time_node).count();
+                //explored_nodes[thread_id]++;
                 if (!taken) {
+                    //auto start_time_LB = chrono::high_resolution_clock::now();
                     temp_lb = dynamic_hungarian(src,dest.n);
+                    //auto end_time_LB = chrono::high_resolution_clock::now();
+                    //LB_time[thread_id] += (float) std::chrono::duration<double>(end_time_LB - start_time_LB).count();
+                    //explored_LB[thread_id]++;
+                    //auto start_time_node = chrono::high_resolution_clock::now();
                     push_to_historytable(key,temp_lb,i);
+                    //auto end_time_node = chrono::high_resolution_clock::now();
+                    //node_time[thread_id] += (float) std::chrono::duration<double>(end_time_node - start_time_node).count();
                     hungarian_solver.undue_row(src,dest.n);
                     hungarian_solver.undue_column(dest.n,src);
                 }
@@ -651,6 +666,9 @@ void solver::enumerate(int i) {
         if (enum_option == "DH") sort(ready_list.begin(),ready_list.end(),bound_sort);
         else if (enum_option == "NN") sort(ready_list.begin(),ready_list.end(),nearest_sort);
     }
+
+    Check_And_Distribute_Wlkload();
+
     //deque<node> pushed_to_local;
 
     while(!ready_list.empty()) {
@@ -661,32 +679,31 @@ void solver::enumerate(int i) {
         enumerated_bounds[thread_id]++;
 
         if (local_pool->size() < (size_t)local_pool_size && !ready_list.empty()) {
-            if (i <= local_depth) {
+            if (i <= (float(local_depth) / float(100) * node_count)) {
                 while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
                     assign_workload(ready_list.back().n,ready_list.back().lb);
                     //pushed_to_local.push_back(ready_list.back());
                     ready_list.pop_back();
                 }
-            }
-            else if (idle_counter > 0 && local_pool->size() <= 1) {
-                while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
-                    assign_workload(ready_list.back().n,ready_list.back().lb);
-                    //pushed_to_local.push_back(ready_list.back());
-                    ready_list.pop_back();
-                }
-            }
-            if (!local_pool->empty()) {
                 sort(local_pool->begin(),local_pool->end(),local_sort);
                 thread_load_mutex.lock();
                 thread_load[thread_id].load = local_pool->back().load_info;
                 thread_load_mutex.unlock();
             }
-            else {
+            else if (local_pool->empty() && idle_counter > 0) {
+                while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
+                    assign_workload(ready_list.back().n,ready_list.back().lb);
+                    //pushed_to_local.push_back(ready_list.back());
+                    ready_list.pop_back();
+                }
+                sort(local_pool->begin(),local_pool->end(),local_sort);
                 thread_load_mutex.lock();
-                thread_load[thread_id].load = INT_MAX;
+                thread_load[thread_id].load = local_pool->back().load_info;
                 thread_load_mutex.unlock();
             }
         }
+
+        Check_And_Distribute_Wlkload();
 
         if (!cur_solution.empty()) {
             u = cur_solution.back();
@@ -701,7 +718,6 @@ void solver::enumerate(int i) {
         taken_arr[taken_node] = 1;
         full_solution = false;
         suffix_cost = 0;
-        Check_And_Distribute_Wlkload();
         
         enumerate(next_level);
 
@@ -729,6 +745,7 @@ void solver::enumerate(int i) {
 
     if (!Wlkload_Request(next_level-1)) {
         next_level = initial_depth + 1;
+        active_thread++;
     }
     else break;
     }
@@ -769,6 +786,12 @@ void solver::solve_parallel(int thread_num, int pool_size) {
         target.hungarian_solver.fix_column(taken_node, cur_node);
         target.hungarian_solver.solve_dynamic();
         target.load_info = target.hungarian_solver.get_matching_cost()/2;
+        //////////////////////////////////////// Test Parameters
+        target.Stolen_load_info.Stolen_Level = target.cur_solution.size();
+        target.Stolen_load_info.Stolen_Lb = target.load_info;
+        target.Stolen_load_info.Stolen_Load = 0;
+        target.Stolen_load_info.Num_of_Sol_Updates = 0;
+        ///////////////////////////////////////
         GPQ.push_back(target);
     }
 
@@ -803,6 +826,10 @@ void solver::solve_parallel(int thread_num, int pool_size) {
                     target.hungarian_solver.fix_column(taken_node, cur_node);
                     target.hungarian_solver.solve_dynamic();
                     target.load_info = target.hungarian_solver.get_matching_cost()/2;
+                    //////////////////////////////////////// Test Parameters
+                    target.Stolen_load_info.Stolen_Level = target.cur_solution.size();
+                    target.Stolen_load_info.Stolen_Lb = target.load_info;
+                    ////////////////////////////////////////
                     GPQ.push_back(target);
 
                     target.taken_arr[taken_node] = 0;
@@ -865,10 +892,6 @@ void solver::solve_parallel(int thread_num, int pool_size) {
 }
 
 void solver::solve(string filename,int thread_num) {
-    if (thread_num == -1 || thread_num == 0) {
-        cerr << "Incorrect thread number input" << endl;
-        exit(-1);
-    }
     thread_total = thread_num;
     retrieve_input(filename);
     //Remove redundant edges in the cost graph
@@ -907,13 +930,6 @@ void solver::solve(string filename,int thread_num) {
             depCnt[dependent_graph[i][k]]++;
         }
     }
-
-    float average_depCnt = 0;
-    for (int i = 1; i < node_count - 1; i++) {
-        average_depCnt += depCnt[i];
-    }
-    average_depCnt = average_depCnt / (node_count - 2);
-    cout << "Average dependance count is " << average_depCnt << endl;
     //cout << "best solution found using initial heuristic is " << best_cost << endl;
     /*
     cout << "the NN solution contains ";
@@ -926,6 +942,7 @@ void solver::solve(string filename,int thread_num) {
     */
     thread_load = new load_stats [thread_total];
     enumerated_bounds = new int [thread_total];
+    donate_cnt = new int [thread_total];
     steal_request = new int [thread_total];
     wait_time = new float [thread_total];
     /*
@@ -938,6 +955,7 @@ void solver::solve(string filename,int thread_num) {
     */
     memset(enumerated_bounds,0,thread_total * sizeof(int));
     memset(steal_request,0,thread_total * sizeof(int));
+    memset(donate_cnt,0,thread_total * sizeof(int));
     memset(wait_time,0,thread_total * sizeof(float));
     /*
     memset(explored_nodes,0,thread_total * sizeof(int));
@@ -961,7 +979,7 @@ void solver::solve(string filename,int thread_num) {
     float max_wait = 0;
     
     for (int i = 1; i <= thread_total; i++) {
-        cout << "Thread " << i << " with enumerated nodes = " << enumerated_bounds[i-1] << endl;
+        cout << "Thread " << i << " with enumerated nodes = " << enumerated_bounds[i-1] << " and donation count = " << donate_cnt[i-1] << endl;
         sum += enumerated_bounds[i-1];
     }
     cout << "Total enumerated nodes = " << sum << endl;
@@ -976,7 +994,7 @@ void solver::solve(string filename,int thread_num) {
 
     cout << "......................Work Donation......................" << endl;
     cout << "maximum wait time = " << max_wait << " happening in thread " << thread_i << " with total steal request = " << steal_request[thread_i-1] << endl;
-
+    cout << "All the nodes in the global pool is depleted in time " << std::chrono::duration<double>(global_deplete_time - start_time_limit).count() << endl;
     /*
     cout << "......................Global pool node info.............." << endl;
     cout << "Total nodes in the global pool are " << Info_arr.size() << endl;
@@ -1023,10 +1041,6 @@ void solver::retrieve_input(string filename) {
     ifstream inFile;
     string line;
     inFile.open(filename);
-    if (inFile.fail()) {
-        cerr << "Error: input file " << filename << " -> " << strerror(errno) << endl;
-        exit(-1);
-    }
 
     // Read input files and store it inside an array.
     vector<vector<int>> file_matrix;
