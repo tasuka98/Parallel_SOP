@@ -10,49 +10,27 @@
 #include "history.hpp"
 
 #define BUCKET_BLK_SIZE 81920
-#define HIS_BLK_SIZE 81920
-#define FREED_SIZE 100000000
 #define COVER_AREA 25
-#define MEMORY_RESTRIC 0.85
-#define DEPLETION_TIME_FRAME 10
 typedef list<pair<pair<vector<bool>,int>,HistoryNode*>> Bucket;
 
 static vector<mutex> hash_lock;
-atomic<bool> memory_limit_reached(false);
 
 class Mem_Allocator {
     private:
-        std::chrono::time_point<std::chrono::system_clock> start_timer;
-        Bucket* Bucket_blk = NULL;
+        Bucket* Bucket_blk;
         unsigned counter;
-        HistoryNode* history_block = NULL;
-        unsigned node_counter = 0;
     public:
         Mem_Allocator();
         Bucket* Get_bucket();
-        HistoryNode* retrieve_his_node();
 };
 
 Mem_Allocator::Mem_Allocator() {
     Bucket_blk = new Bucket[BUCKET_BLK_SIZE];
-    history_block = new HistoryNode[HIS_BLK_SIZE];
     counter = 0;
-    node_counter = 0;
 }
-
-HistoryNode* Mem_Allocator::retrieve_his_node() {
-    if (node_counter >= HIS_BLK_SIZE || history_block == NULL) {
-        history_block = new HistoryNode[HIS_BLK_SIZE];
-        node_counter = 0;
-    }
-    HistoryNode* node = history_block + node_counter;
-    node_counter++;
-    return node;
-}
-
 
 Bucket* Mem_Allocator::Get_bucket() {
-    if (counter == BUCKET_BLK_SIZE || Bucket_blk == NULL) {
+    if (counter == BUCKET_BLK_SIZE) {
         Bucket_blk = new Bucket[BUCKET_BLK_SIZE];
         counter = 0;
     }
@@ -63,12 +41,12 @@ Bucket* Mem_Allocator::Get_bucket() {
 
 class Hash_Map {
     private:
-        atomic<unsigned long> cur_size;
-        unsigned long max_size = 0;
-        unsigned size = 0;
+        atomic<size_t> cur_size;
+        size_t size = 0;
+        size_t max_size = 0;
         size_t node_size = 0;
         vector<Bucket*> History_table;
-        vector<vector<vector<int>>> Depth_info;
+        //vector<vector<HistoryNode*>> Stratified_table;
         vector<Mem_Allocator> Mem_Manager;
     public:
         atomic<long> num_of_waits;
@@ -77,14 +55,13 @@ class Hash_Map {
         size_t get_max_size();
         size_t get_cur_size();
         uint32_t hash_func(pair<vector<bool>,int> item);
-        bool insert(pair<vector<bool>,int>& item,int prefix_cost,int lower_bound, int best_cost, unsigned thread_id);
+        bool insert(pair<vector<bool>,int>& item,HistoryNode* node,unsigned thread_id,unsigned level);
         void calculate_SD();
-        void adjust_max_size(int node_count, int GPQ_size);
         void lock_table(int& key);
         void unlock_table(int& key);
         void increase_size(size_t size_incre);
         void set_node_t(int node_size);
-        void set_up_mem(int thread_num,int node_count);
+        void set_up_mem(int thread_num);
         void set_up_table(int ins_size);
         void average_size();
         HistoryNode* retrieve(pair<vector<bool>,int>* item,int key);
@@ -97,7 +74,7 @@ Hash_Map::Hash_Map(size_t size) {
         cout << "can't retrieve sys mem info\n";
 		exit(1);
 	}
-    max_size = ((double)info.freeram * MEMORY_RESTRIC) - (size * 4) - ((size/COVER_AREA + 1) * sizeof(mutex));
+    max_size = ((double)info.freeram * 0.85) - (size * 4) - ((size/COVER_AREA + 1) * sizeof(mutex));
     cur_size = 0;
     hash_lock = vector<mutex>(size/COVER_AREA + 1);
     History_table.resize(size);
@@ -107,14 +84,8 @@ Hash_Map::Hash_Map(size_t size) {
     for (unsigned i = 0; i < size; i++) History_table[i] = NULL;
 }
 
-void Hash_Map::adjust_max_size(int node_count,int GPQ_size) {
-    max_size -= (GPQ_size * (12*node_count + 2*node_count*node_count) * 4);
-}
-
-void Hash_Map::set_up_mem(int thread_num,int node_count) {
-    for (int i = 0; i < thread_num; i++) {
-        Mem_Manager.push_back(Mem_Allocator());
-    }
+void Hash_Map::set_up_mem(int thread_num) {
+    Mem_Manager = vector<Mem_Allocator>(thread_num);
 }
 
 void Hash_Map::set_up_table(int ins_size) {
@@ -185,39 +156,25 @@ void Hash_Map::average_size() {
     return;
 }
     
-bool Hash_Map::insert(pair<vector<bool>,int>& item,int prefix_cost,int lower_bound, int best_cost, unsigned thread_id) {
+bool Hash_Map::insert(pair<vector<bool>,int>& item,HistoryNode* node,unsigned thread_id,unsigned level) {
     size_t val = hash<vector<bool>>{}(item.first);
     int key = (val + item.second) % size;
-
-    HistoryNode* node = Mem_Manager[thread_id].retrieve_his_node();
-    node->prefix_cost = prefix_cost;
-    node->lower_bound = lower_bound;
 
     hash_lock[key/COVER_AREA].lock();
 
     if (History_table[key] == NULL) {
         History_table[key] = Mem_Manager[thread_id].Get_bucket();
         History_table[key]->push_back(make_pair(item,node));
-        cur_size += (node_size + sizeof(Bucket));
+        cur_size += node_size;
+        cur_size += sizeof(Bucket);
         hash_lock[key/COVER_AREA].unlock();
         return true;
     }
 
     for (auto iter = History_table[key]->begin(); iter != History_table[key]->end(); iter++) {
         if (item.first == iter->first.first && item.second == iter->first.second) {
-            if (prefix_cost >= iter->second->prefix_cost) {
-                hash_lock[key/COVER_AREA].unlock();
-                return false;
-            }
-            int imp = iter->second->prefix_cost - prefix_cost;
-            if (imp <= iter->second->lower_bound - best_cost) {
-                hash_lock[key/COVER_AREA].unlock();
-                return false;
-            }
-            iter->second->prefix_cost = prefix_cost;
-            iter->second->lower_bound = iter->second->lower_bound - imp;
             hash_lock[key/COVER_AREA].unlock();
-            return true;
+            return false;
         }
     }
 

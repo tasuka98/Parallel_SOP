@@ -26,6 +26,7 @@ using namespace std;
 #define TIME_FRAME 0.3
 
 static Hash_Map history_table(TABLE_SIZE);
+//static int recently_added = 0;
 static int best_cost = 0;
 static vector<int> best_solution;
 static deque<sop_state> GPQ;
@@ -165,16 +166,32 @@ bool solver::Wlkload_Request(int i) {
         thread_load[thread_id].out_of_work = true;
         thread_load_mutex.unlock();
 
-        if (!local_pool->empty()) {
-            active_thread++;
-            problem_state = local_pool->back();
-            local_pool->pop_back();
-            terminate = false;
+        if (abandon_work) {
+            abandon_work = false;
+            grabbed = false;
+            if (grabbed) {
+                active_thread++;
+                problem_state = reserve_state;
+                terminate = false;
+            }
+            else {
+                terminate = Grab_from_GPQ(false);
+                if (active_thread > 1 && terminate) terminate = Steal_Workload();
+                else if (active_thread == 1) notify_finished();
+            }
         }
         else {
-            terminate = Grab_from_GPQ(false);
-            if (active_thread > 1 && terminate) terminate = Steal_Workload();
-            else if (active_thread == 1) notify_finished();
+            if (!local_pool->empty()) {
+                active_thread++;
+                problem_state = local_pool->back();
+                local_pool->pop_back();
+                terminate = false;
+            }
+            else {
+                terminate = Grab_from_GPQ(false);
+                if (active_thread > 1 && terminate) terminate = Steal_Workload();
+                else if (active_thread == 1) notify_finished();
+            }
         }
 
         if (!terminate) {
@@ -303,10 +320,10 @@ void solver::notify_finished() {
 
 void solver::push_to_historytable(pair<vector<bool>,int> key,int lower_bound) {
     if (problem_state.full_solution) {
-        history_table.insert(key,problem_state.cur_cost,problem_state.suffix_cost,best_cost,thread_id);
+        history_table.insert(key,problem_state.cur_cost,problem_state.suffix_cost,thread_id,problem_state.cur_solution.size());
     }
     else {
-        history_table.insert(key,problem_state.cur_cost,lower_bound,best_cost,thread_id);
+        history_table.insert(key,problem_state.cur_cost,lower_bound,thread_id,problem_state.cur_solution.size());
     }
     return;
 }
@@ -677,6 +694,26 @@ int solver::enumerate(int i) {
 
     while(!ready_list.empty()) {
         //Take the choosen node and back track if ready list is empty
+        if (enumerated_nodes == 20000 && !abandon_work && active_thread > 1) {
+            grabbed = Grab_from_GPQ(true);
+            //cout << "thread id " << thread_id << " abandon workload" << endl;
+            abandon_work = true;
+        }
+
+        if (abandon_work) {
+            //cout << "hello i = " << i << endl;
+            if (!local_pool->empty()) {
+                push_to_global_pool(local_pool->size());
+            }
+            while (!ready_list.empty()) {
+                assign_workload(ready_list.back().n,ready_list.back().lb,"GPQ"); //pushed_to_local.push_back(ready_list.back());
+                ready_list.pop_back();
+            }
+            
+            if (next_level - 1 == problem_state.initial_depth) break;
+            else return max_depth_below + 1;
+        }
+
         pushed_to_his = ready_list.back().pushed;
         lb = ready_list.back().lb;
         taken_node = ready_list.back().n;
@@ -732,15 +769,20 @@ int solver::enumerate(int i) {
         if (children_depth > max_depth_below) max_depth_below = children_depth;
 
         if (limit_insert && !pushed_to_his) {
-            //if (max_depth_below > 1) push_to_historytable(key,lb);
-            if (max_depth_below > 1 && (history_table.get_cur_size() < (HIS_MEM_LIMIT+0.1) * history_table.get_max_size())) {
-                push_to_historytable(key,lb);
+            if (history_table.get_cur_size() > history_table.get_max_size()) {
+                history_table.free_mem(thread_id);
             }
-            else if (max_depth_below > 2 && (history_table.get_cur_size() < (HIS_MEM_LIMIT+0.2) * history_table.get_max_size())) {
-                push_to_historytable(key,lb);
-            }
-            else if (max_depth_below > 4 && (history_table.get_cur_size() < history_table.get_max_size())) {
-                push_to_historytable(key,lb);
+            else {
+                //if (max_depth_below > 1) push_to_historytable(key,lb);
+                if (max_depth_below > 1 && (history_table.get_cur_size() < (HIS_MEM_LIMIT+0.1) * history_table.get_max_size())) {
+                    push_to_historytable(key,lb);
+                }
+                else if (max_depth_below > 2 && (history_table.get_cur_size() < (HIS_MEM_LIMIT+0.2) * history_table.get_max_size())) {
+                    push_to_historytable(key,lb);
+                }
+                else if (max_depth_below > 4 && (history_table.get_cur_size() < history_table.get_max_size())) {
+                    push_to_historytable(key,lb);
+                }
             }
         }
         
@@ -918,6 +960,7 @@ void solver::solve_parallel(int thread_num, int pool_size) {
         //cout << "GPQ initial depth is " << GPQ.back().cur_solution.size() << endl;
         cout << "Initial GPQ size is " << GPQ.size() << endl;
         history_table.adjust_max_size(node_count,GPQ.size());
+        cout << "Adjusted GPQ max size is " << history_table.get_max_size() << endl;
 
         //calculate_standard_deviation();
         
@@ -993,6 +1036,7 @@ void solver::solve(string filename,int thread_num,string assignment_scheme) {
         best_solution = nearest_neightbor(&temp_solution,&best_cost);
     }
 
+    cout << sizeof(load_stats) << endl;
     //cout << "best initial cost is " << best_cost << endl;
 
     int max_edge_weight = get_maxedgeweight();

@@ -1,0 +1,2 @@
+roll out heuristic initialized
+Initial GPQ size is 1098

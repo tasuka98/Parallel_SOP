@@ -17,9 +17,12 @@ using namespace std;
 class load_stats {
     public:
         bool out_of_work;
+        bool temp_disable;
+        int padding[14];
         int load;
         load_stats() {
             out_of_work = false;
+            temp_disable = false;
             load = 0;
         }
 };
@@ -35,10 +38,24 @@ class edge {
 
 class node {
     public:
-        int n;
-        int lb;
-        int nc;
+        int n = -1;
+        int lb = -1;
+        int nc = -1;
+        bool pushed = false;;
         node(int x, int y): n{x},lb{y} {}
+};
+
+struct sop_state {
+    vector<int> depCnt;
+    vector<int> taken_arr;
+    vector<int> cur_solution;
+    Hungarian hungarian_solver;
+    int cur_cost = 0;
+    int initial_depth = 0;
+    int suffix_cost = 0;
+    int originate = -1;
+    int load_info = -1;
+    bool full_solution = false;
 };
 
 class solver {
@@ -48,43 +65,22 @@ class solver {
         //bool Stolen = false;
         //load_test Stolen_load_info;
         //////////////////////////////////////////////////////////////////////
-
         //Local memory block
-        HistoryNode* history_block = NULL;
-        unsigned counter = 0;
-
+        
         //Time frame to prevent double stealing;
         std::chrono::time_point<std::chrono::system_clock> time_frame_start;
         bool stolen = false;
-
-        bool Just_Stole = false;
-
-        vector<solver> *local_pool = NULL;
-        vector<int> depCnt;
-        vector<int> taken_arr;
+        bool abandon_work = false;
+        bool grabbed = false;
+        int enumerated_nodes = 0;
         int node_count = 0;
-
+        deque<sop_state> *local_pool = NULL;
+        sop_state problem_state;
+        sop_state reserve_state;
         //int EGB_static_lowerbound = 0;
-        int cur_cost = 0;
-        int initial_depth = 0;
         int thread_id = -1;
-
-        //Assignment Herustic Value
-        bool full_solution = false;
-        int suffix_cost = 0;
-        int force_cnt = 0;
-
-        //Assign originate node value
-        int originate = -1;
-        
-        vector<int> cur_solution;
-        Hungarian hungarian_solver;
     public:
-        int load_info = -1;
-        
         HistoryNode* retrieve_his_node();
-        mpf_class retrieve_impact();
-        mpf_class get_load_estimation() const;
         vector<vector<int>> get_cost_matrix(int max_edge_weight);
         vector<int> nearest_neightbor(vector<int>* partial_solution,int* initial_cost);
         vector<int> roll_out();
@@ -93,24 +89,24 @@ class solver {
         //bool HistoryUtilization(pair<vector<bool>,int>* key,int* lowerbound,bool* found);
         bool check_satisfiablity(int* local_cost, vector<int>* tour);
         bool Split_local_pool();
-        bool push_to_global_pool();
+        bool push_to_global_pool(unsigned size);
+        bool Split_level_check();
+        bool Grab_from_GPQ(bool reserve);
+        bool Steal_Workload();
         int get_maxedgeweight();
         int tour_improvement(vector<int> initial_solution,int initial_cost,int initial_depth);
         int dynamic_hungarian(int src, int dest);
-        int Get_cur_depth() const;
-        int Get_cur_cost() const;
-        double get_impact_iter(int i, int current_node, vector<double> &impact_arr, vector<bool> &visited_arr);
+        int enumerate(int i);
+        //void enumerate(int i);
         void Direct_Workload();
-        void print_dep();
-        void enumerate(int i);
+        void assign_thread_load();
         void Check_And_Distribute_Wlkload();
-        void push_to_historytable(pair<vector<bool>,int> key,int lower_bound, int i);
+        void push_to_historytable(pair<vector<bool>,int> key,int lower_bound);
         void assign_parameter(vector<string> setting);
         void check_workload_request(int i);
         void notify_finished();
-        void Check_Wkload_Request();
-        void assign_workload(int taken_n, int lb);
-        void solve(string filename,int thread_num);
+        void assign_workload(int taken_n, int lb, const string dest);
+        void solve(string filename,int thread_num,string assignment_scheme);
         void solve_parallel(int thread_num, int pool_size);
         void retrieve_input(string filename);
         void transitive_redundantcy();

@@ -29,18 +29,22 @@ int main(int argc, char*argv[]) {
     }
     infile.close();
 
-    if (argc < 2 || argc > 3) {
+    if (argc < 2 || argc > 4) {
         cout << "Incorrect format.....\n";
-        cout << "<Instant Name>\n";
+        cout << "<Instant Name> <# of Threads/Workers>\n";
         exit(-1);
     }
     else if (argc == 2) {
         s.assign_parameter(setting);
-        s.solve(argv[1],-1);
+        s.solve(argv[1],10,"RD");
     }
     else if (argc == 3) {
         s.assign_parameter(setting);
-        s.solve(argv[1],atoi(argv[2]));
+        s.solve(argv[1],atoi(argv[2]),"RD");
+    }
+    else if (argc == 4) {
+        s.assign_parameter(setting);
+        s.solve(argv[1],atoi(argv[2]),argv[3]);
     }
     
     return 0;
