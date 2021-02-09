@@ -670,9 +670,9 @@ int solver::enumerate(int i) {
         if (enum_option == "DH") sort(ready_list.begin(),ready_list.end(),bound_sort);
         else if (enum_option == "NN") sort(ready_list.begin(),ready_list.end(),nearest_sort);
     }
-    //deque<node> pushed_to_local;
 
     int lb = -1;
+    bool pushed_to_local = false;
     bool pushed_to_his = false;
 
     while(!ready_list.empty()) {
@@ -684,19 +684,19 @@ int solver::enumerate(int i) {
         key.second = taken_node;
         ready_list.pop_back();
 
-        if (local_pool->size() < (size_t)local_pool_size && !ready_list.empty()) {
+        if (local_pool->size() < ((size_t)local_pool_size / 4) && !ready_list.empty()) {
             //int division = int(total_failed_depth/total_failed_nodes) - 10;
             if (i <= local_depth) {
                 while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
+                    if (!pushed_to_local) pushed_to_local = true;
                     assign_workload(ready_list.back().n,ready_list.back().lb,"LOCAL");
-                    //pushed_to_local.push_back(ready_list.back());
                     ready_list.pop_back();
                 }
             }
             else if (idle_counter > 0 && local_pool->size() <= 1) {
                 while (!ready_list.empty() && local_pool->size() < (size_t)local_pool_size) {
+                    if (!pushed_to_local) pushed_to_local = true;
                     assign_workload(ready_list.back().n,ready_list.back().lb,"LOCAL");
-                    //pushed_to_local.push_back(ready_list.back());
                     ready_list.pop_back();
                 }
             }
@@ -771,6 +771,26 @@ int solver::enumerate(int i) {
             idel_lck.unlock();
             Idel.notify_all();
             return -1;
+        }
+
+        if (pushed_to_local && !(local_pool->empty())) {
+            pushed_to_local = false;
+            unsigned starting_size = problem_state.cur_solution.size() + 1;
+            vector<sop_state> selected_state;
+
+            auto back_up_state = problem_state;
+
+            for (int k = local_pool->size() - 1; k >= 0; k--) {
+                if ((*local_pool)[k].cur_solution.size() >= starting_size) {
+                    (*local_pool)[k].initial_depth = -1;
+                    problem_state = (*local_pool)[k];
+                    local_pool->erase(local_pool->begin() + k);
+                    enumerate(problem_state.cur_solution.size()+1);
+                    k = local_pool->size();
+                }
+            }
+
+            problem_state = back_up_state;
         }
     }
 

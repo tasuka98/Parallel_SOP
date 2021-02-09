@@ -4,10 +4,9 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <gmpxx.h>
-#include <gmp.h>
 #include <queue>
 #include <chrono>
+#include <climits>
 #include "../lib/hungarian.hpp"
 #include "history.hpp"
 #include "load_test.hpp"

@@ -11,7 +11,7 @@ OBJS = main.o solver.o hungarian.o history.o load_test.o
 PROG = sop_solver
 
 $(PROG): $(OBJS)
-	$(CC) $(CXXFLAG) $(OPTIMIZATION_LINK) $(LINK) $(PROG) $^ -lgmp -lgmpxx
+	$(CC) $(CXXFLAG) $(OPTIMIZATION_LINK) $(LINK) $(PROG) $^
 
 main.o: $(SRC)/main.cpp
 	$(CC) $(CXXFLAG) $(OPTIMIZATION) $<
